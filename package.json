@@ -1,0 +1,34 @@
+{
+  "name": "release-announcement-video",
+  "version": "1.0.0",
+  "description": "Turn software releases into ready-to-post announcement videos and social copy for any AI agent or code editor",
+  "main": "bin/cli.js",
+  "bin": {
+    "release-announcement-video": "./bin/cli.js",
+    "release-video": "./bin/cli.js"
+  },
+  "keywords": [
+    "ai-agent",
+    "agent-skill",
+    "antigravity",
+    "claude-code",
+    "cursor",
+    "windsurf",
+    "video-generator",
+    "release-video",
+    "changelog",
+    "playwright",
+    "ffmpeg"
+  ],
+  "author": "Harmish Patel",
+  "license": "MIT",
+  "files": [
+    "bin",
+    "scripts",
+    "references",
+    "examples",
+    "SKILL.md",
+    "README.md",
+    "LICENSE"
+  ]
+}

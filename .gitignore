@@ -1,0 +1,10 @@
+node_modules/
+__pycache__/
+*.pyc
+.agents/
+.claude/
+.cursor/
+.windsurf/
+public/announcement-videos/
+dist/
+*.log
