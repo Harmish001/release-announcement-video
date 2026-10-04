@@ -175,6 +175,21 @@ OVERLAY_JS = r"""
       r.style.left = x + 'px'; r.style.top = y + 'px'; root.appendChild(r);
       setTimeout(() => r.remove(), 700);
     };
+    window.__rvClickAnim = (x, y) => {
+      try {
+        const el = document.elementFromPoint(x, y);
+        if (!el) return;
+        const target = el.closest('button, a, input, div[role=button], .ant-btn, summary') || el;
+        const prevTrans = target.style.transition;
+        const prevTrf = target.style.transform;
+        target.style.transition = 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s ease';
+        target.style.transform = (prevTrf ? prevTrf + ' ' : '') + 'scale(1.08)';
+        setTimeout(() => {
+          target.style.transform = prevTrf;
+          setTimeout(() => { target.style.transition = prevTrans; }, 300);
+        }, 350);
+      } catch (e) {}
+    };
     window.__rvSpot = (b, ms) => {
       const h = document.createElement('div'); h.className = '__rv_hl';
       const p = 8; h.style.left = (b.x - p) + 'px'; h.style.top = (b.y - p) + 'px';
@@ -240,7 +255,7 @@ def run_step(page, plan, step):
             page.wait_for_timeout(int(step.get("ms", 600)))
         else:
             if plan["cursor"] != "none":
-                page.evaluate("([x,y]) => window.__rvRipple && window.__rvRipple(x,y)", [x, y])
+                page.evaluate("([x,y]) => { window.__rvRipple && window.__rvRipple(x,y); window.__rvClickAnim && window.__rvClickAnim(x,y); }", [x, y])
             page.mouse.click(x, y)
             if a == "type":
                 if step.get("clear"):
