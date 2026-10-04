@@ -18,13 +18,25 @@ The video is rendered from **real, headless browser sessions** of the live appli
 
 ---
 
-## ⚡ 1-Line Installation (NPX)
+## ⚡ Installation Options
 
-Add this skill directly to **any code editor or AI agent** with a single command:
-
+### Option A: Via NPX (Direct from NPM or GitHub)
 ```bash
-# Auto-detects and installs into your active editor/agent
+# When published to npm:
 npx release-announcement-video add
+
+# Or directly from GitHub repository (no npm publish needed):
+npx github:Harmish001/release-announcement-video add
+```
+
+### Option B: Local CLI Link (For development / local use)
+Run this once in the skill folder:
+```bash
+npm link
+```
+Then run from **any project folder** on your machine:
+```bash
+release-announcement-video add
 ```
 
 ### Target Specific AI Agents / Code Editors:
