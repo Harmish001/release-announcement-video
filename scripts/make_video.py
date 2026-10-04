@@ -33,6 +33,12 @@ import tempfile
 import time
 from pathlib import Path
 
+# Ensure UTF-8 output on Windows consoles
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 ACTIONS = {"goto", "wait", "click", "type", "press", "hover", "scroll", "highlight", "caption"}
 FPS = 30
 XFADE = 0.4
@@ -46,7 +52,7 @@ def die(msg, code=2):
 
 
 def load_plan(path):
-    plan = json.loads(Path(path).read_text())
+    plan = json.loads(Path(path).read_text(encoding="utf-8-sig"))
     for key in ("product", "headline", "features"):
         if not plan.get(key):
             die(f"plan is missing required field '{key}'")
@@ -61,13 +67,14 @@ def load_plan(path):
     # New fields
     plan.setdefault("click_effect", "ripple")      # ripple | sparkle | glow
     plan.setdefault("nav_transition", "fade")       # fade | slide | zoom
-    plan.setdefault("voiceover", False)             # needs edge-tts
+    plan.setdefault("voiceover", True)              # enable voice-over by default when TTS is available
     plan.setdefault("voiceover_voice", "en-US-AriaNeural")
     plan.setdefault("custom_effects", [])           # [{effect, selector}, ...]
     if plan["format"] not in ("landscape", "vertical"):
         die("format must be 'landscape' or 'vertical'")
     vertical = plan["format"] == "vertical"
-    plan.setdefault("viewport", {"width": 540, "height": 960} if vertical else {"width": 1280, "height": 720})
+    # Full HD (1080p) defaults
+    plan.setdefault("viewport", {"width": 1080, "height": 1920} if vertical else {"width": 1920, "height": 1080})
     plan.setdefault("cursor", "tap" if vertical else "arrow")
     if plan["cursor"] not in ("arrow", "tap", "none"):
         die("cursor must be 'arrow', 'tap' or 'none'")
@@ -110,13 +117,12 @@ def abs_url(plan, url):
 # --------------------------------------------------------------------------- theme extraction
 
 def extract_site_theme(url, plan):
-    """Visit the live site and extract the dominant brand/accent color.
+    """Visit the live site and extract the dominant brand/accent color using canvas color parsing.
 
     Priority:
-      1. CSS custom properties: --primary, --accent, --brand, --color-primary, etc.
-      2. Background color of first <nav> or <header>
-      3. Background of first button[class*=primary]
-      4. Fallback: plan["accent"] unchanged.
+      1. Saturated brand colors on buttons, CTAs, links, headers, badges
+      2. Meta theme-color or CSS custom properties (--primary, --accent, --brand, etc.)
+      3. Fallback: plan["accent"] unchanged.
     """
     if not url:
         return plan["accent"]
@@ -125,7 +131,7 @@ def extract_site_theme(url, plan):
     except ImportError:
         return plan["accent"]
 
-    result = None
+    extracted = None
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch()
@@ -137,46 +143,60 @@ def extract_site_theme(url, plan):
                 page.wait_for_load_state("networkidle", timeout=3000)
             except Exception:
                 pass
-            result = page.evaluate("""() => {
-                const root = document.documentElement;
-                const cs = getComputedStyle(root);
-                const vars = ['--primary','--accent','--brand','--color-primary',
-                              '--color-accent','--theme-color','--brand-color',
-                              '--primary-color','--main-color'];
-                for (const v of vars) {
+            extracted = page.evaluate(r"""() => {
+                function parseRgb(str) {
+                    if (!str || str === 'transparent' || str === 'rgba(0, 0, 0, 0)') return null;
+                    const cvs = document.createElement('canvas');
+                    cvs.width = cvs.height = 1;
+                    const ctx = cvs.getContext('2d');
+                    ctx.fillStyle = str;
+                    ctx.fillRect(0, 0, 1, 1);
+                    const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+                    if (a < 50) return null;
+                    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+                    const sat = max === 0 ? 0 : (max - min) / max;
+                    const lum = (max + min) / (2 * 255);
+                    if (lum > 0.94 || lum < 0.06 || sat < 0.25) return null;
+                    return { hex: '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join(''), sat, lum };
+                }
+
+                // 1. Check meta theme-color
+                const meta = document.querySelector('meta[name="theme-color"]');
+                if (meta && meta.content) {
+                    const parsed = parseRgb(meta.content);
+                    if (parsed && parsed.sat >= 0.3) return parsed.hex;
+                }
+
+                // 2. Check CSS variables
+                const cs = getComputedStyle(document.documentElement);
+                for (const v of ['--primary', '--brand', '--accent', '--color-primary', '--p', '--theme-color', '--primary-600', '--primary-500']) {
                     const val = cs.getPropertyValue(v).trim();
-                    if (val && (val.startsWith('#') || val.startsWith('rgb'))) return val;
+                    const parsed = parseRgb(val);
+                    if (parsed && parsed.sat >= 0.3) return parsed.hex;
                 }
-                const navEl = document.querySelector('nav, header, [class*=nav], [class*=header]');
-                if (navEl) {
-                    const bg = getComputedStyle(navEl).backgroundColor;
-                    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+
+                // 3. Score all interactive elements, CTAs, badges, and colored elements by saturation & frequency
+                const counts = {};
+                const els = document.querySelectorAll('button, a, [class*=btn], [class*=primary], [class*=brand], [class*=accent], svg, [class*=active], [class*=bg-], [class*=text-], [class*=border-]');
+                for (const el of els) {
+                    const s = getComputedStyle(el);
+                    for (const prop of [s.backgroundColor, s.color, s.borderColor]) {
+                        const parsed = parseRgb(prop);
+                        if (parsed) {
+                            counts[parsed.hex] = (counts[parsed.hex] || 0) + 1 + (parsed.sat * 3);
+                        }
+                    }
                 }
-                const btn = document.querySelector(
-                    'button[class*=primary], a[class*=primary], .btn-primary, [class*=btn-primary]');
-                if (btn) {
-                    const bg = getComputedStyle(btn).backgroundColor;
-                    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
-                }
-                return null;
+                const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+                return sorted.length > 0 ? sorted[0][0] : null;
             }""")
             browser.close()
     except Exception as exc:
         print(f"[theme] Could not extract site theme: {exc}", file=sys.stderr)
 
-    if result:
-        import re
-        m = re.match(r"rgb\((\d+),\s*(\d+),\s*(\d+)\)", result)
-        if m:
-            r2, g, b = int(m.group(1)), int(m.group(2)), int(m.group(3))
-            # Skip near-white or near-black (transparent fallback artifacts)
-            if not (r2 > 230 and g > 230 and b > 230) and not (r2 < 20 and g < 20 and b < 20):
-                result = f"#{r2:02x}{g:02x}{b:02x}"
-            else:
-                result = None
-        if result and result.startswith("#") and len(result) >= 7:
-            print(f"[theme] Extracted site accent: {result}", file=sys.stderr)
-            return result
+    if extracted and extracted.startswith("#") and len(extracted) >= 7:
+        print(f"[theme] Successfully extracted brand theme color: {extracted}", file=sys.stderr)
+        return extracted
 
     return plan["accent"]
 
@@ -527,6 +547,18 @@ def record_feature(browser, plan, idx, feat, rec_dir, fail_dir):
     ctx.add_init_script(overlay_script(plan))
     page = ctx.new_page()
     page.set_default_timeout(7000)
+    # Dismiss cookie/consent banners before any interaction
+    try:
+        for sel in ["button:has-text('Accept All')", "button:has-text('Accept')",
+                    "button:has-text('Agree')", "button:has-text('Got it')",
+                    "[aria-label='Close']", "button:has-text('Decline')"]:
+            el = page.locator(sel).first
+            if el.is_visible(timeout=800):
+                el.click()
+                page.wait_for_timeout(300)
+                break
+    except Exception:
+        pass
     t_page = time.monotonic()
     trim = 0.0
     try:
@@ -571,10 +603,12 @@ def record_feature(browser, plan, idx, feat, rec_dir, fail_dir):
 
 # --------------------------------------------------------------------------- voice-over (edge-tts)
 
+# --------------------------------------------------------------------------- voice-over (edge-tts)
+
 def generate_voiceover(plan, work_dir):
     """Generate TTS audio using edge-tts for intro headline + each feature caption.
 
-    Returns list of (key, mp3_path) tuples, or None if disabled/unavailable.
+    Returns list of dicts with key, clip_idx, and mp3 path, or None if disabled/unavailable.
     Install with: pip install edge-tts
     """
     if not plan.get("voiceover"):
@@ -589,32 +623,39 @@ def generate_voiceover(plan, work_dir):
     tts_dir = work_dir / "tts"
     tts_dir.mkdir(exist_ok=True)
 
-    lines = []
+    items = []
     if plan.get("headline"):
-        lines.append(("intro", plan["headline"]))
+        intro_text = f"{plan.get('product', '')}: {plan['headline']}" if plan.get("product") else plan["headline"]
+        items.append({"key": "intro", "clip_idx": 0, "text": intro_text})
     for i, feat in enumerate(plan["features"]):
         text = feat.get("caption", "")
         if text:
-            lines.append((f"feat{i}", text))
-    if plan.get("version"):
-        lines.append(("outro", f"What's new in {plan['version']}."))
+            items.append({"key": f"feat{i}", "clip_idx": i + 1, "text": text})
+    
+    outro_idx = len(plan["features"]) + 1
+    if plan.get("version") and plan["version"].lower() not in ("latest", "head"):
+        items.append({"key": "outro", "clip_idx": outro_idx, "text": f"What's new in {plan['version']}. Check it out today!"})
     elif plan.get("cta"):
-        lines.append(("outro", f"Try it at {plan['cta']}."))
+        items.append({"key": "outro", "clip_idx": outro_idx, "text": f"Try it now at {plan['cta']}."})
+    else:
+        items.append({"key": "outro", "clip_idx": outro_idx, "text": "Explore all the latest updates today!"})
 
     async def _gen_all():
         import edge_tts as et
         results = []
-        for key, text in lines:
-            if not text.strip():
+        for item in items:
+            text = item["text"].strip()
+            if not text:
                 continue
-            mp3_path = tts_dir / f"{key}.mp3"
+            mp3_path = tts_dir / f"{item['key']}.mp3"
             try:
                 comm = et.Communicate(text, voice)
                 await comm.save(str(mp3_path))
-                results.append((key, str(mp3_path)))
-                print(f"[voiceover] TTS '{key}': {mp3_path.name}", file=sys.stderr)
+                item["file"] = str(mp3_path)
+                results.append(item)
+                print(f"[voiceover] Generated TTS for '{item['key']}': {text[:40]}...", file=sys.stderr)
             except Exception as exc:
-                print(f"[voiceover] TTS failed for '{key}': {exc}", file=sys.stderr)
+                print(f"[voiceover] TTS failed for '{item['key']}': {exc}", file=sys.stderr)
         return results
 
     try:
@@ -626,26 +667,52 @@ def generate_voiceover(plan, work_dir):
     return clips if clips else None
 
 
-def merge_voiceover_into_video(video_path, tts_clips, work_dir):
-    """Concatenate TTS clips and merge as audio track into the final video in-place."""
-    if not tts_clips:
+def merge_voiceover_into_video(video_path, tts_items, clip_durations, total_dur, work_dir, music=None):
+    """Align TTS clips to their exact segment timestamps using ffmpeg adelay and amix."""
+    if not tts_items:
         return
-    concat_list = work_dir / "tts_concat.txt"
-    concat_list.write_text(
-        "\n".join(f"file '{Path(c[1]).as_posix()}'" for c in tts_clips),
-        encoding="utf-8")
-    tts_merged = work_dir / "tts_merged.mp3"
-    run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list),
-         "-c:a", "libmp3lame", "-b:a", "128k", str(tts_merged)])
 
-    vo_tmp = video_path.with_suffix(".vo_tmp.mp4")
-    vid_dur = duration(video_path)
-    run(["ffmpeg", "-y", "-i", str(video_path), "-i", str(tts_merged),
-         "-map", "0:v", "-map", "1:a",
-         "-af", f"afade=t=out:st={max(vid_dur - 1.5, 0):.2f}:d=1.5,volume=1.2",
-         "-c:v", "copy", "-c:a", "aac", "-b:a", "160k",
-         "-shortest", str(vo_tmp)])
-    shutil.move(str(vo_tmp), str(video_path))
+    # Calculate start offset for each video clip index
+    # clip 0: intro (starts at 0.0)
+    # clip k: starts at sum(durs[0..k-1]) - k * XFADE
+    offsets = [0.0]
+    acc = 0.0
+    for i in range(len(clip_durations) - 1):
+        acc += clip_durations[i] - XFADE
+        offsets.append(acc)
+
+    cmd = ["ffmpeg", "-y", "-i", str(video_path)]
+    filter_parts = []
+    mix_inputs = []
+
+    for idx, item in enumerate(tts_items):
+        c_idx = item["clip_idx"]
+        start_sec = offsets[c_idx] if c_idx < len(offsets) else 0.0
+        # Add a slight 250ms breathing offset after transition starts
+        delay_ms = int(max(0, (start_sec + 0.25) * 1000))
+        input_num = idx + 1
+        cmd += ["-i", str(item["file"])]
+        filter_parts.append(f"[{input_num}:a]adelay={delay_ms}|{delay_ms}[a{idx}]")
+        mix_inputs.append(f"[a{idx}]")
+
+    if mix_inputs:
+        fade_out_st = max(total_dur - 1.2, 0)
+        filter_parts.append(
+            f"{''.join(mix_inputs)}amix=inputs={len(mix_inputs)}:normalize=0:dropout_transition=0,"
+            f"volume=1.35,afade=t=out:st={fade_out_st:.2f}:d=1.2[vo]"
+        )
+        fc = ";".join(filter_parts)
+
+        vo_tmp = video_path.with_suffix(".vo_tmp.mp4")
+        full_cmd = cmd + [
+            "-filter_complex", fc,
+            "-map", "0:v", "-map", "[vo]",
+            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+            "-shortest", str(vo_tmp)
+        ]
+        run(full_cmd)
+        shutil.move(str(vo_tmp), str(video_path))
+        print(f"[voiceover] Synchronized voiceover audio merged into {video_path.name}", file=sys.stderr)
 
 
 # --------------------------------------------------------------------------- ffmpeg
@@ -664,7 +731,7 @@ def duration(path):
 
 def card_to_clip(png, secs, W, H, out):
     run(["ffmpeg", "-y", "-loop", "1", "-i", str(png), "-t", str(secs), "-r", str(FPS),
-         "-vf", f"scale={W}:{H},format=yuv420p", "-c:v", "libx264", "-crf", "17", "-an", str(out)])
+         "-vf", f"scale={W}:{H},format=yuv420p", "-c:v", "libx264", "-crf", "14", "-preset", "slow", "-an", str(out)])
 
 
 def recording_to_clip(webm, trim, speed, W, H, out):
@@ -672,7 +739,7 @@ def recording_to_clip(webm, trim, speed, W, H, out):
     if speed and speed != 1:
         vf = f"setpts=PTS/{speed}," + vf
     run(["ffmpeg", "-y", "-ss", f"{trim:.2f}", "-i", str(webm), "-vf", vf,
-         "-c:v", "libx264", "-crf", "17", "-preset", "medium", "-an", str(out)])
+         "-c:v", "libx264", "-crf", "14", "-preset", "slow", "-an", str(out)])
 
 
 def assemble(clips, out, music=None):
@@ -701,11 +768,11 @@ def assemble(clips, out, music=None):
     cmd += ["-map", f"[{last}]" if fc else "0:v"]
     if music:
         cmd += ["-map", f"{len(clips)}:a", "-af", f"volume=0.28,afade=t=out:st={max(total - 1.6, 0):.2f}:d=1.6",
-                "-c:a", "aac", "-b:a", "160k", "-t", f"{total:.2f}"]
-    cmd += ["-c:v", "libx264", "-crf", "18", "-preset", "medium", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-b:a", "192k", "-t", f"{total:.2f}"]
+    cmd += ["-c:v", "libx264", "-crf", "15", "-preset", "slow", "-pix_fmt", "yuv420p",
             "-movflags", "+faststart", "-r", str(FPS), str(out)]
     run(cmd)
-    return total
+    return total, durs
 
 
 def contact_sheet(video, total, out_png, vertical):
@@ -720,7 +787,7 @@ def contact_sheet(video, total, out_png, vertical):
 # --------------------------------------------------------------------------- main
 
 def main():
-    print("🎬 Release Announcement Video Renderer v2.0")
+    print("🎬 Release Announcement Video Renderer v2.1 (Full HD 1080p)")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("plan")
     ap.add_argument("-o", "--out", default=None)
@@ -742,7 +809,7 @@ def main():
     except ImportError:
         die("playwright is not installed: pip install playwright && playwright install chromium")
 
-    # Auto-extract site theme color when accent is the generic default or --extract-theme is given
+    # Auto-extract site theme color when accent is generic default or --extract-theme is given
     if plan.get("base_url") and (a.extract_theme or plan.get("accent") == "#6366f1"):
         extracted = extract_site_theme(plan["base_url"], plan)
         if extracted and extracted != plan["accent"]:
@@ -801,24 +868,37 @@ def main():
         music = mp if mp.is_absolute() else plan_dir / mp
         if not music.exists():
             die(f"music file not found: {music}")
-    total = assemble(clips, out, music)
+    total, clip_durs = assemble(clips, out, music)
 
-    # Voice-over: generate TTS and merge into final video
+    # Voice-over: generate TTS and merge precisely with clip timestamps
     tts_clips = generate_voiceover(plan, work)
     if tts_clips:
-        merge_voiceover_into_video(out, tts_clips, work)
+        merge_voiceover_into_video(out, tts_clips, clip_durs, total, work, music)
 
-    sheet = out.with_suffix(".contact.png")
-    contact_sheet(out, total, sheet, vertical)
+    # Save thumbnail.png in the target directory
+    thumbnail_path = out.parent / "thumbnail.png"
+    contact_sheet(out, total, thumbnail_path, vertical)
 
     if not a.keep_work:
         shutil.rmtree(work, ignore_errors=True)
+        # Clean up plan.json from output folder so only 3 files remain: mp4, thumbnail.png, announcement.md
+        plan_file = Path(a.plan).resolve()
+        if plan_file.exists() and plan_file.parent == out.parent:
+            plan_file.unlink(missing_ok=True)
+        # Remove any leftover contact sheet or rav_* temp dirs
+        old_contact = out.with_suffix(".contact.png")
+        if old_contact.exists() and old_contact != thumbnail_path:
+            old_contact.unlink(missing_ok=True)
+        for leftover in out.parent.glob("rav_*"):
+            shutil.rmtree(leftover, ignore_errors=True)
+
     warn = []
     if total > 60:
         warn.append(f"video is {total:.0f}s; social announcements usually work best under 45s. Trim features or raise 'speed'.")
-    print(json.dumps({"ok": True, "video": str(out), "contact_sheet": str(sheet),
+    print(json.dumps({"ok": True, "video": str(out), "thumbnail": str(thumbnail_path),
                       "seconds": round(total, 1), "format": plan["format"], "warnings": warn}, indent=2))
 
 
 if __name__ == "__main__":
     main()
+

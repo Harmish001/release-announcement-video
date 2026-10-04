@@ -17,6 +17,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Ensure UTF-8 output on Windows consoles
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8")
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 
@@ -234,24 +240,63 @@ def auto_build_plan(url, repo_path, from_ref, to_ref, fmt="landscape", manual_fe
 
 
 def generate_announcement_copy(plan, output_dir):
-    """Generate announcement.md with X, LinkedIn, YouTube, and Markdown Changelog posts."""
+    """Generate announcement.md with X, LinkedIn, YouTube metadata, and Markdown Changelog."""
     product = plan.get("product", "App")
     version = plan.get("version", "Latest")
     headline = plan.get("headline", "")
+    subhead = plan.get("subhead", "")
     cta = plan.get("cta", "Check it out")
     features = plan.get("features", [])
 
     bullets = "\n".join([f"- {f.get('caption')}" for f in features])
-    tags = ", ".join([f'"{product.replace(" ", "")}"', '"software update"', '"release"', '"demo"'])
+    prod_clean = product.replace(" ", "")
+    tags_list = [product, f"{product} update", "software demo", "tutorial", "feature release", "how to use", "guide"]
+    tags_str = ", ".join([f'"{t}"' for t in tags_list])
+    hashtags = f"#{prod_clean} #SoftwareUpdate #TechDemo #Productivity #HowTo #ReleaseNotes"
 
     md_content = f"""# 🚀 {product} Release Announcement ({version})
+
+---
+
+## 📺 YouTube Video Details
+
+### **Title:**
+{product} - {headline} ({version} Walkthrough & Demo)
+
+### **Description:**
+Discover what's new in **{product}** ({version})! 🚀
+{subhead if subhead else headline}
+
+In this video, we walk you through the latest features and demonstrate how to use them step-by-step:
+
+📌 **Key Highlights & Features:**
+{chr(10).join([f'• {f.get("caption")}' for f in features])}
+
+🔗 **Try it live here:**
+https://{cta}
+
+---
+
+👉 Don't forget to **Like**, **Subscribe**, and hit the **Bell icon** 🔔 to stay updated with new releases!
+
+{hashtags}
+
+### **Tags:**
+{tags_str}
+
+### **Category:**
+Science & Technology / How-to & Style
+
+---
 
 ## 🐦 𝕏 / Twitter Post
 {headline} is here! 🎉
 
 {chr(10).join([f'✨ {f.get("caption")}' for f in features])}
 
-Try it live now: {{{{link}}}} 👇
+Try it live now: https://{cta} 👇
+
+{hashtags}
 
 ---
 
@@ -262,26 +307,9 @@ Here is what's new in this release:
 {chr(10).join([f'• {f.get("caption")}' for f in features])}
 
 Take a look at the video walkthrough and explore the update today:
-🔗 {{{{link}}}}
+🔗 https://{cta}
 
----
-
-## 📺 YouTube Details
-**Title:**
-{product} {version} Update: {headline}
-
-**Description:**
-We're excited to announce the {version} release of {product}! 🚀
-
-What's new in this update:
-{chr(10).join([f'• {f.get("caption")}' for f in features])}
-
-Try it out here: {{{{link}}}}
-
-Don't forget to like and subscribe for more updates!
-
-**Tags:**
-{tags}
+{hashtags}
 
 ---
 
@@ -298,9 +326,9 @@ Don't forget to like and subscribe for more updates!
 
 
 def main():
-    print("🎬 Release Announcement Video Generator v2.0")
+    print("🎬 Release Announcement Video Generator v2.1 (Full HD 1080p)")
     ap = argparse.ArgumentParser(description="1-Command Release Video & Announcement Generator")
-    ap.add_argument("--version", action="version", version="2.0.0")
+    ap.add_argument("--version", action="version", version="2.1.0")
     ap.add_argument("--url", help="Base URL where the live app is running (default: auto-detected localhost or 3000)")
     ap.add_argument("--repo", default=".", help="Repository root path (default: current directory)")
     ap.add_argument("--from", dest="frm", help="Starting git ref or previous release tag")
@@ -314,8 +342,8 @@ def main():
                     help="Click animation effect (default: ripple)")
     ap.add_argument("--nav-transition", choices=["fade", "slide", "zoom"], default="fade",
                     help="In-browser page navigation transition (default: fade)")
-    ap.add_argument("--voiceover", action="store_true",
-                    help="Generate AI voice-over via edge-tts (pip install edge-tts required)")
+    ap.add_argument("--no-voiceover", action="store_true",
+                    help="Disable AI voice-over (enabled by default)")
     ap.add_argument("--voiceover-voice", default="en-US-AriaNeural",
                     help="edge-tts voice name (default: en-US-AriaNeural)")
     ap.add_argument("--custom-effects", default=None,
@@ -341,6 +369,7 @@ def main():
             print(f"[Warning] --custom-effects could not be parsed as JSON: {a.custom_effects}",
                   file=sys.stderr)
 
+    voiceover_enabled = not a.no_voiceover
     print(f"\n🎬 [1/4] Discovering release changes & inspecting UI from {url}...")
     plan, lead_slug, short_hash = auto_build_plan(
         url=url,
@@ -356,7 +385,7 @@ def main():
         accent=a.accent,
         click_effect=a.click_effect,
         nav_transition=a.nav_transition,
-        voiceover=a.voiceover,
+        voiceover=voiceover_enabled,
         voiceover_voice=a.voiceover_voice,
         custom_effects=custom_effects,
     )
@@ -396,11 +425,12 @@ def main():
 
     print(f"✍️  [4/4] Generating social announcement copy...")
     copy_path = generate_announcement_copy(plan, feature_dir)
+    thumbnail_file = feature_dir / "thumbnail.png"
 
     print(f"\n" + "=" * 60)
     print(f"🎉 SUCCESS! Release announcement package ready:")
     print(f"   📹 Video:         {video_output}")
-    print(f"   🖼️  Contact Sheet: {video_output.with_suffix('.contact.png')}")
+    print(f"   🖼️  Thumbnail:     {thumbnail_file}")
     print(f"   📋 Social Copy:   {copy_path}")
     print(f"=" * 60 + "\n")
 
