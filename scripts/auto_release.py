@@ -61,7 +61,7 @@ def get_next_sequence_number(output_dir):
     out_path = Path(output_dir)
     if not out_path.exists():
         return "01"
-    existing = list(out_path.glob("*.mp4"))
+    existing = list(out_path.iterdir())
     nums = []
     for f in existing:
         m = re.match(r"^(\d+)_", f.name)
@@ -116,7 +116,10 @@ def inspect_elements(url, mobile=False, storage_state=None):
     return elements
 
 
-def auto_build_plan(url, repo_path, from_ref, to_ref, fmt="landscape", manual_features=None, product_override=None, headline_override=None, storage_state=None, music=None, accent=None):
+def auto_build_plan(url, repo_path, from_ref, to_ref, fmt="landscape", manual_features=None,
+                    product_override=None, headline_override=None, storage_state=None, music=None,
+                    accent=None, click_effect=None, nav_transition=None, voiceover=False,
+                    voiceover_voice=None, custom_effects=None):
     """Automatically build plan.json from git diff and live inspection."""
     product = product_override or get_product_name(repo_path)
     
@@ -209,9 +212,17 @@ def auto_build_plan(url, repo_path, from_ref, to_ref, fmt="landscape", manual_fe
         "subhead": f"Explore the latest enhancements in {product}",
         "base_url": base_url,
         "format": fmt,
+        # accent: leave as default so make_video auto-extracts site theme;
+        # only override if user explicitly passed --accent
         "accent": accent or "#6366f1",
         "cta": base_url.replace("http://", "").replace("https://", ""),
         "features": features,
+        # New capabilities
+        "click_effect": click_effect or "ripple",
+        "nav_transition": nav_transition or "fade",
+        "voiceover": voiceover,
+        "voiceover_voice": voiceover_voice or "en-US-AriaNeural",
+        "custom_effects": custom_effects or [],
     }
 
     if storage_state:
@@ -223,7 +234,7 @@ def auto_build_plan(url, repo_path, from_ref, to_ref, fmt="landscape", manual_fe
 
 
 def generate_announcement_copy(plan, output_dir):
-    """Generate announcement.md with X, LinkedIn, and Markdown Changelog posts."""
+    """Generate announcement.md with X, LinkedIn, YouTube, and Markdown Changelog posts."""
     product = plan.get("product", "App")
     version = plan.get("version", "Latest")
     headline = plan.get("headline", "")
@@ -231,6 +242,7 @@ def generate_announcement_copy(plan, output_dir):
     features = plan.get("features", [])
 
     bullets = "\n".join([f"- {f.get('caption')}" for f in features])
+    tags = ", ".join([f'"{product.replace(" ", "")}"', '"software update"', '"release"', '"demo"'])
 
     md_content = f"""# 🚀 {product} Release Announcement ({version})
 
@@ -251,6 +263,25 @@ Here is what's new in this release:
 
 Take a look at the video walkthrough and explore the update today:
 🔗 {{{{link}}}}
+
+---
+
+## 📺 YouTube Details
+**Title:**
+{product} {version} Update: {headline}
+
+**Description:**
+We're excited to announce the {version} release of {product}! 🚀
+
+What's new in this update:
+{chr(10).join([f'• {f.get("caption")}' for f in features])}
+
+Try it out here: {{{{link}}}}
+
+Don't forget to like and subscribe for more updates!
+
+**Tags:**
+{tags}
 
 ---
 
@@ -276,7 +307,18 @@ def main():
     ap.add_argument("--features", help="Custom comma-separated list of feature names/captions")
     ap.add_argument("--product", help="Override product name")
     ap.add_argument("--headline", help="Override intro headline")
-    ap.add_argument("--accent", help="Custom brand accent color (e.g. #6366f1)")
+    ap.add_argument("--accent", help="Override brand accent color (e.g. #6366f1). Defaults to auto-extract from site.")
+    ap.add_argument("--click-effect", choices=["ripple", "sparkle", "glow"], default="ripple",
+                    help="Click animation effect (default: ripple)")
+    ap.add_argument("--nav-transition", choices=["fade", "slide", "zoom"], default="fade",
+                    help="In-browser page navigation transition (default: fade)")
+    ap.add_argument("--voiceover", action="store_true",
+                    help="Generate AI voice-over via edge-tts (pip install edge-tts required)")
+    ap.add_argument("--voiceover-voice", default="en-US-AriaNeural",
+                    help="edge-tts voice name (default: en-US-AriaNeural)")
+    ap.add_argument("--custom-effects", default=None,
+                    help='JSON array of custom per-element effects, e.g. \'{"effect":"sparkle","selector":"button.cta"}\''
+                         " (can be passed multiple times or as JSON array string)")
     ap.add_argument("--storage-state", help="Playwright storage auth JSON state file")
     ap.add_argument("--music", help="Audio file path for background music")
     ap.add_argument("--output", "-o", help="Custom output MP4 path")
@@ -285,6 +327,17 @@ def main():
 
     url = a.url or detect_local_dev_url()
     manual_features = [f.strip() for f in a.features.split(",") if f.strip()] if a.features else None
+
+    # Parse custom effects if provided as JSON string
+    custom_effects = None
+    if a.custom_effects:
+        try:
+            custom_effects = json.loads(a.custom_effects)
+            if isinstance(custom_effects, dict):
+                custom_effects = [custom_effects]
+        except json.JSONDecodeError:
+            print(f"[Warning] --custom-effects could not be parsed as JSON: {a.custom_effects}",
+                  file=sys.stderr)
 
     print(f"\n🎬 [1/4] Discovering release changes & inspecting UI from {url}...")
     plan, lead_slug, short_hash = auto_build_plan(
@@ -299,19 +352,30 @@ def main():
         storage_state=a.storage_state,
         music=a.music,
         accent=a.accent,
+        click_effect=a.click_effect,
+        nav_transition=a.nav_transition,
+        voiceover=a.voiceover,
+        voiceover_voice=a.voiceover_voice,
+        custom_effects=custom_effects,
     )
 
     out_dir = Path(a.repo) / "public" / "announcement-videos"
     out_dir.mkdir(parents=True, exist_ok=True)
 
     seq = get_next_sequence_number(out_dir)
+    
     if a.output:
         video_output = Path(a.output)
         video_output.parent.mkdir(parents=True, exist_ok=True)
+        feature_dir = video_output.parent
+        plan_path = feature_dir / (video_output.stem + "_plan.json")
     else:
-        video_output = out_dir / f"{seq}_{lead_slug}_{short_hash}.mp4"
+        folder_name = f"{seq}_{lead_slug}_{short_hash}"
+        feature_dir = out_dir / folder_name
+        feature_dir.mkdir(parents=True, exist_ok=True)
+        video_output = feature_dir / "video.mp4"
+        plan_path = feature_dir / "plan.json"
 
-    plan_path = out_dir / f"{seq}_{lead_slug}_{short_hash}_plan.json"
     plan_path.write_text(json.dumps(plan, indent=2), encoding="utf-8")
     print(f"✨ [2/4] Generated video plan: {plan_path}")
 
@@ -329,7 +393,7 @@ def main():
         sys.exit(res.returncode)
 
     print(f"✍️  [4/4] Generating social announcement copy...")
-    copy_path = generate_announcement_copy(plan, out_dir)
+    copy_path = generate_announcement_copy(plan, feature_dir)
 
     print(f"\n" + "=" * 60)
     print(f"🎉 SUCCESS! Release announcement package ready:")

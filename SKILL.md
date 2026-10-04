@@ -46,9 +46,36 @@ npx release-announcement-video generate --url http://localhost:3000
 This automated step:
 1. **Reads Git**: Gathers commit log, diff, and route mappings.
 2. **Inspects Live DOM**: Discovers real button/input selectors on the running app.
-3. **Builds Plan**: Creates `plan.json` with benefit-first captions.
-4. **Renders Video**: Records animated browser session with spotlights and encodes MP4 + 12-frame contact sheet.
-5. **Generates Social Copy**: Writes `announcement.md` (𝕏 / Twitter post, LinkedIn post, Markdown changelog) inside `public/announcement-videos/`.
+3. **Extracts Site Theme**: Visits `base_url`, reads CSS custom properties + element colors to auto-set the brand accent (overrides the generic default automatically).
+4. **Builds Plan**: Creates `plan.json` with benefit-first captions.
+5. **Renders Video**: Records animated browser session with spotlights and encodes MP4 + 12-frame contact sheet.
+6. **Generates Social Copy**: Writes `announcement.md` (𝕏 / Twitter post, LinkedIn post, Markdown changelog) inside `public/announcement-videos/`.
+
+### New Capabilities (all optional)
+
+| Flag / Plan field | Values | What it does |
+|---|---|---|
+| `--click-effect` / `click_effect` | `ripple` (default) · `sparkle` · `glow` | Click animation injected into every recorded browser frame |
+| `--nav-transition` / `nav_transition` | `fade` (default) · `slide` · `zoom` | Smooth in-browser overlay transition on every `goto` step |
+| `--voiceover` / `voiceover: true` | flag | Narrates captions using edge-tts Neural TTS; merged as audio track |
+| `--voiceover-voice` / `voiceover_voice` | e.g. `en-GB-SoniaNeural` | Any edge-tts voice name |
+| `--custom-effects` / `custom_effects` | JSON array | Per-element effects: `sparkle`, `glow`, `pulse` on any CSS selector |
+| `accent` auto-extracted | — | When `base_url` is set and accent is default, the site's own brand color is used for all cards/effects |
+
+```bash
+# Full example with all new features:
+python scripts/auto_release.py --url http://localhost:3000 \
+  --click-effect sparkle \
+  --nav-transition zoom \
+  --voiceover \
+  --voiceover-voice en-US-JennyNeural \
+  --custom-effects '[{"effect":"sparkle","selector":"button.primary"}]'
+```
+
+Install voice-over dependency (one-time):
+```bash
+pip install edge-tts
+```
 
 ---
 
@@ -70,12 +97,17 @@ python scripts/inspect_page.py <url> [--mobile]
 Read `references/plan-format.md` for the schema and action list.
 
 **Output Naming & Location Convention:**
-Always save videos sequentially inside `public/announcement-videos/`:
-`public/announcement-videos/<seq>_<commit_message_slug>_<short_hash>.mp4`
+Always save videos sequentially inside feature-specific folders within `public/announcement-videos/`:
+`public/announcement-videos/<seq>_<commit_message_slug>_<short_hash>/`
+
+Inside this folder, you should save:
+- `video.mp4`
+- `plan.json`
+- `announcement.md`
 
 ```bash
 python scripts/make_video.py plan.json --validate-only
-python scripts/make_video.py plan.json -o public/announcement-videos/01_feat_my_feature_abc1234.mp4
+python scripts/make_video.py plan.json -o public/announcement-videos/01_feat_my_feature_abc1234/video.mp4
 ```
 
 ### 4. Check the result with your eyes

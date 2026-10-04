@@ -13,7 +13,12 @@ One file describes the whole video. Run `make_video.py plan.json --validate-only
 | `subhead` | no | `""` | Intro card sub-line |
 | `base_url` | no | `""` | Prepended to relative `goto` urls. Required if a feature does not start with `goto` |
 | `format` | no | `landscape` | `landscape` (1920x1080) or `vertical` (1080x1920, mobile emulation) |
-| `accent` | no | `#6366f1` | Brand color for cards, cursor ripples, spotlight |
+| `accent` | no | auto | Brand color. **Auto-extracted from the live site** when `base_url` is set and accent is the default. Override by setting an explicit hex value. |
+| `click_effect` | no | `ripple` | Click animation: `ripple` (ring), `sparkle` (particle burst), `glow` (radial pulse) |
+| `nav_transition` | no | `fade` | In-browser page transition on `goto`: `fade`, `slide`, `zoom` |
+| `voiceover` | no | `false` | Narrate feature captions using AI TTS. Requires `pip install edge-tts`. |
+| `voiceover_voice` | no | `en-US-AriaNeural` | Any valid [edge-tts voice](https://github.com/rany2/edge-tts#voices). |
+| `custom_effects` | no | `[]` | List of `{"effect": "sparkle"\|"glow"\|"pulse", "selector": "css-selector"}` objects. Applied on every feature page after load. User instructions like "add sparkle on the submit button" map here. |
 | `bullets` | no | feature captions | Outro checklist, max 5 shown |
 | `cta` | no | `""` | Button text on the outro, usually the URL |
 | `logo` | no | | Image path, relative to the plan file. Replaces the dot on cards |
@@ -98,3 +103,66 @@ Anything Playwright accepts: CSS (`#id`, `[data-testid="x"]`), `text=Save`, `but
 ## Errors
 
 On failure the renderer prints JSON with the feature index, the step, Playwright's message, and a path to a screenshot of the page at that moment, then exits non-zero. The work folder is kept so you can open the screenshot.
+
+---
+
+## Voice-over
+
+Set `"voiceover": true` to narrate captions with AI Text-to-Speech via **edge-tts** (free, Microsoft Neural voices).
+
+```bash
+pip install edge-tts
+```
+
+The renderer speaks the intro headline and each feature caption in sequence. The merged audio track is added to the final MP4.
+
+You can pick any voice from the [edge-tts voice list](https://github.com/rany2/edge-tts#voices):
+```json
+{
+  "voiceover": true,
+  "voiceover_voice": "en-GB-SoniaNeural"
+}
+```
+
+---
+
+## Custom User Effects
+
+The `custom_effects` field accepts a list of `{effect, selector}` objects. These are applied to matching DOM elements on every recorded page after it loads.
+
+| effect | What it does |
+|---|---|
+| `sparkle` | Particle burst on every click on that element |
+| `glow` | Radial light pulse on click |
+| `pulse` | Continuous pulsing border animation (good for CTA buttons) |
+
+```json
+{
+  "custom_effects": [
+    {"effect": "sparkle", "selector": "button.submit"},
+    {"effect": "pulse",   "selector": ".cta-hero"},
+    {"effect": "glow",    "selector": "#sign-up-btn"}
+  ]
+}
+```
+
+Via CLI:
+```bash
+python scripts/auto_release.py --url http://localhost:3000 \
+  --click-effect sparkle \
+  --nav-transition zoom \
+  --voiceover \
+  --custom-effects '[{"effect":"sparkle","selector":"button.cta"}]'
+```
+
+---
+
+## Site Theme Color Auto-Extraction
+
+When `base_url` is set and `accent` is not explicitly overridden, the renderer visits the live site before recording and extracts the dominant brand color from:
+
+1. CSS custom properties (`--primary`, `--accent`, `--brand`, `--color-primary`, etc.)
+2. Background color of `<nav>` / `<header>`
+3. Background color of `button[class*=primary]`
+
+The extracted color is used for the intro/outro card gradients, spotlight borders, cursor ripples, and click effects — making every video match the real site brand automatically.

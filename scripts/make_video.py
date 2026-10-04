@@ -3,15 +3,26 @@
 
   make_video.py plan.json -o out.mp4
 
-Pipeline: validate plan -> render intro/outro cards (Playwright screenshots)
--> record each feature flow in headless Chromium (injected cursor, click ripples,
-captions, spotlight) -> encode and crossfade everything with ffmpeg -> write a
-contact sheet PNG next to the video so the result can be checked by eye.
+Pipeline: validate plan -> extract site theme color -> render intro/outro
+cards (Playwright screenshots) -> record each feature flow in headless
+Chromium (injected cursor, sparkle/ripple/glow click effects, smooth page
+transitions, captions, spotlight) -> TTS voice-over via edge-tts -> encode
+and crossfade everything with ffmpeg -> write a contact sheet PNG.
 
 Requires: python3, playwright (+ chromium), ffmpeg/ffprobe on PATH.
+Optional:  edge-tts (pip install edge-tts) for voice-over.
 Plan format: see references/plan-format.md
+
+New plan.json fields (all optional):
+  click_effect      "ripple" (default) | "sparkle" | "glow"
+  nav_transition    "fade" (default) | "slide" | "zoom"
+  voiceover         false (default) | true  -- requires edge-tts
+  voiceover_voice   edge-tts voice name, default "en-US-AriaNeural"
+  custom_effects    list of {effect, selector} objects applied on every page
+                    effect: "sparkle" | "glow" | "pulse"
 """
 import argparse
+import asyncio
 import html
 import json
 import os
@@ -47,6 +58,12 @@ def load_plan(path):
     plan.setdefault("format", "landscape")
     plan.setdefault("intro_seconds", 3.0)
     plan.setdefault("outro_seconds", 3.5)
+    # New fields
+    plan.setdefault("click_effect", "ripple")      # ripple | sparkle | glow
+    plan.setdefault("nav_transition", "fade")       # fade | slide | zoom
+    plan.setdefault("voiceover", False)             # needs edge-tts
+    plan.setdefault("voiceover_voice", "en-US-AriaNeural")
+    plan.setdefault("custom_effects", [])           # [{effect, selector}, ...]
     if plan["format"] not in ("landscape", "vertical"):
         die("format must be 'landscape' or 'vertical'")
     vertical = plan["format"] == "vertical"
@@ -54,6 +71,10 @@ def load_plan(path):
     plan.setdefault("cursor", "tap" if vertical else "arrow")
     if plan["cursor"] not in ("arrow", "tap", "none"):
         die("cursor must be 'arrow', 'tap' or 'none'")
+    if plan["click_effect"] not in ("ripple", "sparkle", "glow"):
+        die("click_effect must be 'ripple', 'sparkle' or 'glow'")
+    if plan["nav_transition"] not in ("fade", "slide", "zoom"):
+        die("nav_transition must be 'fade', 'slide' or 'zoom'")
     base = plan.get("base_url", "").rstrip("/")
     plan["base_url"] = base
     for i, feat in enumerate(plan["features"]):
@@ -84,6 +105,80 @@ def abs_url(plan, url):
     if url.startswith(("http://", "https://", "file://")):
         return url
     return plan["base_url"] + (url if url.startswith("/") else "/" + url)
+
+
+# --------------------------------------------------------------------------- theme extraction
+
+def extract_site_theme(url, plan):
+    """Visit the live site and extract the dominant brand/accent color.
+
+    Priority:
+      1. CSS custom properties: --primary, --accent, --brand, --color-primary, etc.
+      2. Background color of first <nav> or <header>
+      3. Background of first button[class*=primary]
+      4. Fallback: plan["accent"] unchanged.
+    """
+    if not url:
+        return plan["accent"]
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return plan["accent"]
+
+    result = None
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            vp = plan["viewport"]
+            ctx = browser.new_context(viewport=vp)
+            page = ctx.new_page()
+            page.goto(url, wait_until="load", timeout=12000)
+            try:
+                page.wait_for_load_state("networkidle", timeout=3000)
+            except Exception:
+                pass
+            result = page.evaluate("""() => {
+                const root = document.documentElement;
+                const cs = getComputedStyle(root);
+                const vars = ['--primary','--accent','--brand','--color-primary',
+                              '--color-accent','--theme-color','--brand-color',
+                              '--primary-color','--main-color'];
+                for (const v of vars) {
+                    const val = cs.getPropertyValue(v).trim();
+                    if (val && (val.startsWith('#') || val.startsWith('rgb'))) return val;
+                }
+                const navEl = document.querySelector('nav, header, [class*=nav], [class*=header]');
+                if (navEl) {
+                    const bg = getComputedStyle(navEl).backgroundColor;
+                    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+                }
+                const btn = document.querySelector(
+                    'button[class*=primary], a[class*=primary], .btn-primary, [class*=btn-primary]');
+                if (btn) {
+                    const bg = getComputedStyle(btn).backgroundColor;
+                    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') return bg;
+                }
+                return null;
+            }""")
+            browser.close()
+    except Exception as exc:
+        print(f"[theme] Could not extract site theme: {exc}", file=sys.stderr)
+
+    if result:
+        import re
+        m = re.match(r"rgb\((\d+),\s*(\d+),\s*(\d+)\)", result)
+        if m:
+            r2, g, b = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            # Skip near-white or near-black (transparent fallback artifacts)
+            if not (r2 > 230 and g > 230 and b > 230) and not (r2 < 20 and g < 20 and b < 20):
+                result = f"#{r2:02x}{g:02x}{b:02x}"
+            else:
+                result = None
+        if result and result.startswith("#") and len(result) >= 7:
+            print(f"[theme] Extracted site accent: {result}", file=sys.stderr)
+            return result
+
+    return plan["accent"]
 
 
 # --------------------------------------------------------------------------- cards
@@ -140,14 +235,70 @@ def card_html(kind, plan, W, H, logo_uri):
     return f'<!doctype html><meta charset="utf-8"><style>{css}</style><body><div class="wrap">{body}</div></body>'
 
 
-# --------------------------------------------------------------------------- overlay (cursor, captions, spotlight)
+# --------------------------------------------------------------------------- overlay JS (cursor, effects, transitions)
+
+# Extra CSS blocks injected conditionally based on plan settings
+_SPARKLE_CSS = r"""
+  .__rv_spark{position:fixed;z-index:2147483646;pointer-events:none;width:6px;height:6px;
+    border-radius:50%;animation:__rv_spark .55s ease-out forwards}
+  @keyframes __rv_spark{0%{transform:translate(0,0) scale(1);opacity:1}
+    100%{transform:translate(var(--dx),var(--dy)) scale(0);opacity:0}}"""
+
+_GLOW_CSS = r"""
+  .__rv_glow{position:fixed;z-index:2147483646;pointer-events:none;border-radius:50%;
+    width:60px;height:60px;margin:-30px 0 0 -30px;
+    background:radial-gradient(circle,var(--gclr) 0%,transparent 70%);
+    animation:__rv_glow .7s ease-out forwards}
+  @keyframes __rv_glow{0%{transform:scale(.3);opacity:.95}100%{transform:scale(2.8);opacity:0}}"""
+
+_NAV_CSS = r"""
+  #__rv_nav_veil{position:fixed;inset:0;z-index:2147483640;pointer-events:none;
+    background:#000;opacity:0;transition:opacity 0.25s ease}
+  #__rv_nav_veil.on{opacity:1}"""
 
 OVERLAY_JS = r"""
 (() => {
   if (window.top !== window || window.__rv) return;
   window.__rv = true;
-  const ACCENT = '__ACCENT__', CAP = __CAP__, CURSOR = '__CURSOR__';
-  const css = `
+  const ACCENT = '__ACCENT__', CAP = __CAP__, CURSOR = '__CURSOR__',
+        CLICK_FX = '__CLICK_FX__';
+
+  /* ---- sparkle ---- */
+  const SPARKLE_COLORS = [ACCENT, '#fff', '#ffe066', '#ff6ee8', '#6ef8ff'];
+  function spawnSparkles(x, y) {
+    const count = 14;
+    for (let i = 0; i < count; i++) {
+      const el = document.createElement('div'); el.className = '__rv_spark';
+      const angle = (2 * Math.PI * i) / count + (Math.random() - 0.5) * 0.6;
+      const dist = 28 + Math.random() * 38;
+      el.style.setProperty('--dx', Math.cos(angle) * dist + 'px');
+      el.style.setProperty('--dy', Math.sin(angle) * dist + 'px');
+      el.style.left = x + 'px'; el.style.top = y + 'px';
+      el.style.background = SPARKLE_COLORS[i % SPARKLE_COLORS.length];
+      el.style.animationDelay = (Math.random() * 0.08) + 's';
+      document.documentElement.appendChild(el);
+      setTimeout(() => el.remove(), 700);
+    }
+  }
+
+  /* ---- glow ---- */
+  function spawnGlow(x, y) {
+    const el = document.createElement('div'); el.className = '__rv_glow';
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+    el.style.setProperty('--gclr', ACCENT + 'cc');
+    document.documentElement.appendChild(el);
+    setTimeout(() => el.remove(), 800);
+  }
+
+  /* ---- veil for nav transitions ---- */
+  function ensureVeil() {
+    if (document.getElementById('__rv_nav_veil')) return;
+    const v = document.createElement('div'); v.id = '__rv_nav_veil';
+    document.documentElement.appendChild(v);
+  }
+
+  /* ---- CSS ---- */
+  const baseCss = `
   #__rv_cur{position:fixed;left:0;top:0;z-index:2147483647;pointer-events:none;opacity:0;width:26px;height:26px}
   #__rv_cur svg{filter:drop-shadow(0 2px 3px rgba(0,0,0,.5))}
   .__rv_rip{position:fixed;z-index:2147483646;pointer-events:none;width:18px;height:18px;margin:-9px 0 0 -9px;
@@ -161,11 +312,15 @@ OVERLAY_JS = r"""
   #__rv_cap.on{opacity:1;transform:translate(-50%,0)}
   .__rv_hl{position:fixed;z-index:2147483645;pointer-events:none;border:4px solid ${ACCENT};border-radius:12px;
     box-shadow:0 0 0 9999px rgba(8,10,20,.45);opacity:0;transition:opacity .35s}
-  .__rv_hl.on{opacity:1}`;
+  .__rv_hl.on{opacity:1}
+  __EXTRA_CSS__`;
+
   const mount = () => {
     const root = document.documentElement;
-    const st = document.createElement('style'); st.textContent = css; root.appendChild(st);
+    const st = document.createElement('style'); st.textContent = baseCss; root.appendChild(st);
     const cap = document.createElement('div'); cap.id = '__rv_cap'; root.appendChild(cap);
+    ensureVeil();
+
     window.__rvCaption = (t) => {
       try { sessionStorage.setItem('__rv_cap', t || ''); } catch (e) {}
       cap.textContent = t || ''; cap.classList.toggle('on', !!t);
@@ -174,6 +329,11 @@ OVERLAY_JS = r"""
       const r = document.createElement('div'); r.className = '__rv_rip';
       r.style.left = x + 'px'; r.style.top = y + 'px'; root.appendChild(r);
       setTimeout(() => r.remove(), 700);
+    };
+    window.__rvClickEffect = (x, y) => {
+      if (CLICK_FX === 'sparkle') spawnSparkles(x, y);
+      else if (CLICK_FX === 'glow') spawnGlow(x, y);
+      else window.__rvRipple(x, y);
     };
     window.__rvClickAnim = (x, y) => {
       try {
@@ -197,6 +357,33 @@ OVERLAY_JS = r"""
       root.appendChild(h); requestAnimationFrame(() => h.classList.add('on'));
       setTimeout(() => h.classList.remove('on'), Math.max(ms - 350, 100));
       setTimeout(() => h.remove(), ms + 100);
+    };
+    /* nav veil control (called from Python side via page.evaluate) */
+    window.__rvNavIn = () => {
+      const v = document.getElementById('__rv_nav_veil'); if (!v) return;
+      v.style.transition = 'opacity 0.22s ease'; v.classList.add('on');
+    };
+    window.__rvNavOut = () => {
+      const v = document.getElementById('__rv_nav_veil'); if (!v) return;
+      v.style.transition = 'opacity 0.28s ease'; v.classList.remove('on');
+    };
+    /* custom per-element effects from plan.custom_effects */
+    window.__rvApplyCustomEffects = (effects) => {
+      if (!effects || !effects.length) return;
+      effects.forEach(eff => {
+        document.querySelectorAll(eff.selector).forEach(el => {
+          if (eff.effect === 'sparkle') {
+            el.addEventListener('click', ev => spawnSparkles(ev.clientX, ev.clientY), {capture: true});
+          } else if (eff.effect === 'glow') {
+            el.addEventListener('click', ev => spawnGlow(ev.clientX, ev.clientY), {capture: true});
+          } else if (eff.effect === 'pulse') {
+            const uid = '__rvP' + Math.random().toString(36).slice(2);
+            const kf = `@keyframes ${uid}{0%{box-shadow:0 0 0 0 ${ACCENT}88}70%{box-shadow:0 0 0 12px transparent}100%{box-shadow:0 0 0 0 transparent}}`;
+            const s = document.createElement('style'); s.textContent = kf; document.head.appendChild(s);
+            el.style.animation = uid + ' 1.5s infinite';
+          }
+        });
+      });
     };
     if (CURSOR === 'arrow') {
       const c = document.createElement('div'); c.id = '__rv_cur';
@@ -224,8 +411,38 @@ SMOOTH_SCROLL_JS = """([dy, dur]) => new Promise(res => {
 def overlay_script(plan):
     vw = plan["viewport"]["width"]
     cap_px = round(max(20, min(30, vw * 0.021)))
-    return (OVERLAY_JS.replace("__ACCENT__", plan["accent"])
-            .replace("__CAP__", str(cap_px)).replace("__CURSOR__", plan["cursor"]))
+    click_fx = plan.get("click_effect", "ripple")
+    extra_css = _NAV_CSS
+    if click_fx == "sparkle":
+        extra_css += _SPARKLE_CSS
+    elif click_fx == "glow":
+        extra_css += _GLOW_CSS
+    return (OVERLAY_JS
+            .replace("__ACCENT__", plan["accent"])
+            .replace("__CAP__", str(cap_px))
+            .replace("__CURSOR__", plan["cursor"])
+            .replace("__CLICK_FX__", click_fx)
+            .replace("__EXTRA_CSS__", extra_css))
+
+
+# --------------------------------------------------------------------------- nav transitions
+
+def nav_transition_in(page, nav_fx):
+    """Overlay the veil before navigation (fade/slide/zoom are all opacity-based for now)."""
+    try:
+        page.evaluate("() => window.__rvNavIn && window.__rvNavIn()")
+        page.wait_for_timeout(260)
+    except Exception:
+        pass
+
+
+def nav_transition_out(page, nav_fx):
+    """Remove the veil after the new page has rendered."""
+    try:
+        page.evaluate("() => window.__rvNavOut && window.__rvNavOut()")
+        page.wait_for_timeout(320)
+    except Exception:
+        pass
 
 
 # --------------------------------------------------------------------------- recording
@@ -239,10 +456,13 @@ def move_to(page, box, plan):
 
 def run_step(page, plan, step):
     a = step["action"]
+    nav_fx = plan.get("nav_transition", "fade")
     if "caption" in step and a != "caption":
         page.evaluate("t => window.__rvCaption && window.__rvCaption(t)", step["caption"])
     if a == "goto":
+        nav_transition_in(page, nav_fx)
         page.goto(abs_url(plan, step["url"]), wait_until="load")
+        nav_transition_out(page, nav_fx)
     elif a == "wait":
         page.wait_for_timeout(int(step.get("ms", 800)))
     elif a in ("click", "hover", "type"):
@@ -255,7 +475,10 @@ def run_step(page, plan, step):
             page.wait_for_timeout(int(step.get("ms", 600)))
         else:
             if plan["cursor"] != "none":
-                page.evaluate("([x,y]) => { window.__rvRipple && window.__rvRipple(x,y); window.__rvClickAnim && window.__rvClickAnim(x,y); }", [x, y])
+                page.evaluate(
+                    "([x,y]) => { window.__rvClickEffect && window.__rvClickEffect(x,y); "
+                    "window.__rvClickAnim && window.__rvClickAnim(x,y); }",
+                    [x, y])
             page.mouse.click(x, y)
             if a == "type":
                 if step.get("clear"):
@@ -328,6 +551,12 @@ def record_feature(browser, plan, idx, feat, rec_dir, fail_dir):
                     page.wait_for_load_state("networkidle", timeout=3000)
                 except Exception:
                     pass  # dev servers with HMR sockets never go idle; that's fine
+                # Apply custom per-element effects from plan
+                custom_effects = plan.get("custom_effects", [])
+                if custom_effects:
+                    page.evaluate(
+                        "eff => window.__rvApplyCustomEffects && window.__rvApplyCustomEffects(eff)",
+                        custom_effects)
         page.wait_for_timeout(int(feat.get("hold_ms", 1000)))
     except BaseException:
         try:
@@ -338,6 +567,85 @@ def record_feature(browser, plan, idx, feat, rec_dir, fail_dir):
     video = page.video
     ctx.close()
     return Path(video.path()), trim
+
+
+# --------------------------------------------------------------------------- voice-over (edge-tts)
+
+def generate_voiceover(plan, work_dir):
+    """Generate TTS audio using edge-tts for intro headline + each feature caption.
+
+    Returns list of (key, mp3_path) tuples, or None if disabled/unavailable.
+    Install with: pip install edge-tts
+    """
+    if not plan.get("voiceover"):
+        return None
+    try:
+        import edge_tts  # noqa: F401
+    except ImportError:
+        print("[voiceover] edge-tts not installed. Run: pip install edge-tts", file=sys.stderr)
+        return None
+
+    voice = plan.get("voiceover_voice", "en-US-AriaNeural")
+    tts_dir = work_dir / "tts"
+    tts_dir.mkdir(exist_ok=True)
+
+    lines = []
+    if plan.get("headline"):
+        lines.append(("intro", plan["headline"]))
+    for i, feat in enumerate(plan["features"]):
+        text = feat.get("caption", "")
+        if text:
+            lines.append((f"feat{i}", text))
+    if plan.get("version"):
+        lines.append(("outro", f"What's new in {plan['version']}."))
+    elif plan.get("cta"):
+        lines.append(("outro", f"Try it at {plan['cta']}."))
+
+    async def _gen_all():
+        import edge_tts as et
+        results = []
+        for key, text in lines:
+            if not text.strip():
+                continue
+            mp3_path = tts_dir / f"{key}.mp3"
+            try:
+                comm = et.Communicate(text, voice)
+                await comm.save(str(mp3_path))
+                results.append((key, str(mp3_path)))
+                print(f"[voiceover] TTS '{key}': {mp3_path.name}", file=sys.stderr)
+            except Exception as exc:
+                print(f"[voiceover] TTS failed for '{key}': {exc}", file=sys.stderr)
+        return results
+
+    try:
+        clips = asyncio.run(_gen_all())
+    except Exception as exc:
+        print(f"[voiceover] TTS generation failed: {exc}", file=sys.stderr)
+        return None
+
+    return clips if clips else None
+
+
+def merge_voiceover_into_video(video_path, tts_clips, work_dir):
+    """Concatenate TTS clips and merge as audio track into the final video in-place."""
+    if not tts_clips:
+        return
+    concat_list = work_dir / "tts_concat.txt"
+    concat_list.write_text(
+        "\n".join(f"file '{Path(c[1]).as_posix()}'" for c in tts_clips),
+        encoding="utf-8")
+    tts_merged = work_dir / "tts_merged.mp3"
+    run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(concat_list),
+         "-c:a", "libmp3lame", "-b:a", "128k", str(tts_merged)])
+
+    vo_tmp = video_path.with_suffix(".vo_tmp.mp4")
+    vid_dur = duration(video_path)
+    run(["ffmpeg", "-y", "-i", str(video_path), "-i", str(tts_merged),
+         "-map", "0:v", "-map", "1:a",
+         "-af", f"afade=t=out:st={max(vid_dur - 1.5, 0):.2f}:d=1.5,volume=1.2",
+         "-c:v", "copy", "-c:a", "aac", "-b:a", "160k",
+         "-shortest", str(vo_tmp)])
+    shutil.move(str(vo_tmp), str(video_path))
 
 
 # --------------------------------------------------------------------------- ffmpeg
@@ -417,6 +725,8 @@ def main():
     ap.add_argument("-o", "--out", default=None)
     ap.add_argument("--keep-work", action="store_true", help="keep intermediate clips and failure screenshots")
     ap.add_argument("--validate-only", action="store_true")
+    ap.add_argument("--extract-theme", action="store_true",
+                    help="Force theme color extraction from base_url (overrides any accent in plan)")
     a = ap.parse_args()
 
     for tool in ("ffmpeg", "ffprobe"):
@@ -430,6 +740,13 @@ def main():
         from playwright.sync_api import sync_playwright
     except ImportError:
         die("playwright is not installed: pip install playwright && playwright install chromium")
+
+    # Auto-extract site theme color when accent is the generic default or --extract-theme is given
+    if plan.get("base_url") and (a.extract_theme or plan.get("accent") == "#6366f1"):
+        extracted = extract_site_theme(plan["base_url"], plan)
+        if extracted and extracted != plan["accent"]:
+            print(f"[theme] Overriding accent with site color: {extracted}", file=sys.stderr)
+            plan["accent"] = extracted
 
     plan_dir = Path(a.plan).resolve().parent
     out = Path(a.out) if a.out else plan_dir / (Path(a.plan).stem + ".mp4")
@@ -451,7 +768,7 @@ def main():
     clips = []
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        # cards
+        # cards (intro + outro)
         cctx = browser.new_context(viewport={"width": W, "height": H})
         for kind, secs in (("intro", plan["intro_seconds"]), ("outro", plan["outro_seconds"])):
             pg = cctx.new_page()
@@ -484,6 +801,12 @@ def main():
         if not music.exists():
             die(f"music file not found: {music}")
     total = assemble(clips, out, music)
+
+    # Voice-over: generate TTS and merge into final video
+    tts_clips = generate_voiceover(plan, work)
+    if tts_clips:
+        merge_voiceover_into_video(out, tts_clips, work)
+
     sheet = out.with_suffix(".contact.png")
     contact_sheet(out, total, sheet, vertical)
 
