@@ -720,6 +720,7 @@ def contact_sheet(video, total, out_png, vertical):
 # --------------------------------------------------------------------------- main
 
 def main():
+    print("🎬 Release Announcement Video Renderer v2.0")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("plan")
     ap.add_argument("-o", "--out", default=None)

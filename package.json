@@ -1,6 +1,6 @@
 {
   "name": "release-announcement-video",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Turn software releases into ready-to-post announcement videos and social copy for any AI agent or code editor",
   "main": "bin/cli.js",
   "bin": {

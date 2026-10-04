@@ -298,7 +298,9 @@ Don't forget to like and subscribe for more updates!
 
 
 def main():
+    print("🎬 Release Announcement Video Generator v2.0")
     ap = argparse.ArgumentParser(description="1-Command Release Video & Announcement Generator")
+    ap.add_argument("--version", action="version", version="2.0.0")
     ap.add_argument("--url", help="Base URL where the live app is running (default: auto-detected localhost or 3000)")
     ap.add_argument("--repo", default=".", help="Repository root path (default: current directory)")
     ap.add_argument("--from", dest="frm", help="Starting git ref or previous release tag")
