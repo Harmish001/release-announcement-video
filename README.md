@@ -40,8 +40,8 @@ python scripts/auto_release.py --url http://localhost:3000 --dry-run
 Add `--before-after` for a before card from the previous tag, or `--before-url` to film an already-running old build. That path does not checkout your worktree.
 
 ## Output
-
-`public/announcement-videos/<seq>_<slug>/` holds `video.mp4`, `thumbnail.png`, `video.srt`, `video.vtt`, `video.gif`, `announcement.md`, `timings.json`, and `plan.json`. The folder is gitignored here. Keep it gitignored in the app repo so the mp4s stay out of the production bundle.
+ 
+`public/announcement-videos/<seq>_<slug>/` holds `video.mp4`, `thumbnail.jpg`, and `announcement.md`. All extra and intermediate files are automatically cleaned up. The folder is gitignored here. Keep it gitignored in the app repo so the mp4s stay out of the production bundle.
 
 Formats: `landscape` (1920x1080), `vertical` (phone viewport, 1080x1920 output), `square` (1080x1080).
 

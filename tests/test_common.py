@@ -127,18 +127,22 @@ class CommonTest(unittest.TestCase):
             capture_output=True, text=True,
         )
         self.assertEqual(r.returncode, 0, r.stderr[-2000:] + r.stdout[-2000:])
-        self.assertTrue(plan_path.exists())
         self.assertTrue(video.exists())
-        self.assertTrue((out_dir / "video.srt").exists())
         self.assertTrue((out_dir / "announcement.md").exists())
+        self.assertTrue((out_dir / "thumbnail.jpg").exists())
         announcement = (out_dir / "announcement.md").read_text(encoding="utf-8")
         self.assertIn("0:00 Intro", announcement)
         probe = subprocess.run(
             ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
-             "-of", "csv=p=0", str(out_dir / "thumbnail.png")],
+             "-of", "csv=p=0", str(out_dir / "thumbnail.jpg")],
             capture_output=True, text=True,
         )
         self.assertEqual(probe.stdout.strip(), "1280,720")
+        # Ensure only .mp4, .md, and .jpg files remain (no .json, .srt, .vtt, .gif, .cache, etc.)
+        for f in out_dir.iterdir():
+            self.assertIn(f.suffix.lower(), [".mp4", ".md", ".jpg", ".jpeg"])
+        self.assertFalse((out_dir / "plan.json").exists())
+        self.assertFalse((out_dir / "video.srt").exists())
 
 
 if __name__ == "__main__":

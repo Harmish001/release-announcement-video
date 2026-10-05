@@ -1,0 +1,36 @@
+{
+  "product": "Fixture",
+  "headline": "Export the report",
+  "accent": "#0f766e",
+  "voiceover": false,
+  "zoom": 1.1,
+  "format": "landscape",
+  "viewport": {
+    "width": 1280,
+    "height": 720
+  },
+  "intro_seconds": 1.4,
+  "outro_seconds": 1.4,
+  "base_url": "file:///index.html",
+  "features": [
+    {
+      "caption": "Export",
+      "narration": "Export the finished report.",
+      "hold_ms": 400,
+      "steps": [
+        {
+          "action": "goto",
+          "url": "/index.html"
+        },
+        {
+          "action": "click",
+          "selector": "#export"
+        },
+        {
+          "action": "wait",
+          "ms": 400
+        }
+      ]
+    }
+  ]
+}

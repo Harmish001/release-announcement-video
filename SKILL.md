@@ -14,7 +14,7 @@ The agent writes the plan and checks the frames. The scripts render. Auto mode i
 2. Write `public/announcement-videos/<seq>_<slug>/plan.json`. Put the spoken line in `narration` and a short on-screen line in `caption`. See `references/plan-format.md`.
 3. Validate: `python scripts/make_video.py <plan.json> --validate-only`
 4. Render: `python scripts/make_video.py <plan.json> -o <dir>/video.mp4`
-5. Open `thumbnail.png` and the failure screenshots if the render exited non-zero. Fix the plan. Render again. Unchanged scenes are reused from `<dir>/.cache`.
+5. Open `thumbnail.jpg` and the failure screenshots if the render exited non-zero. Fix the plan. Render again.
 
 `python scripts/auto_release.py --url <url> --dry-run` only builds a draft plan and checks selectors. Do not record until the dry-run is clean and the steps match the page.
 
@@ -34,11 +34,11 @@ Output stays in `public/announcement-videos/`. Keep that path gitignored so the 
 
 ## Failure
 
-A bad step exits non-zero, prints the feature index, the step, and the Playwright error, and saves a screenshot under the `rav_*/failures` folder next to the output. `plan.json` is not deleted.
+A bad step exits non-zero, prints the feature index, the step, and the Playwright error, and saves a screenshot under the `rav_*/failures` folder next to the output.
 
 ## Feedback
 
-Re-render the same plan. Only scenes whose inputs changed are recorded again.
+Re-render the same plan:
 
 ```bash
 python scripts/make_video.py plan.json -o video.mp4 --note "zoom more"
@@ -52,4 +52,4 @@ Any other note exits 2. Edit `plan.json` for that change (a caption, a selector,
 
 ## Output
 
-Next to the mp4: `thumbnail.png` (1280x720 title plus a product shot), `preview` is `<name>.gif`, `<name>.srt`, `<name>.vtt`, `announcement.md` (YouTube chapters from the clip lengths), `timings.json`, and `plan.json`.
+Only 3 clean files remain in the output folder: `video.mp4` (Full HD video), `thumbnail.jpg` (1280x720 cover image), and `announcement.md` (social copy and YouTube description). All intermediate and extra files are automatically cleaned up.

@@ -12,6 +12,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -425,7 +426,15 @@ def main():
 
     print(f"✍️  [4/4] Generating social announcement copy...")
     copy_path = generate_announcement_copy(plan, feature_dir)
-    thumbnail_file = feature_dir / "thumbnail.png"
+    thumbnail_file = feature_dir / "thumbnail.jpg"
+
+    # Strictly ensure only .mp4, .md, and .jpg files remain in the output folder
+    for item in list(feature_dir.iterdir()):
+        if item.is_dir():
+            shutil.rmtree(item, ignore_errors=True)
+        elif item.is_file():
+            if item.suffix.lower() not in (".mp4", ".md", ".jpg", ".jpeg"):
+                item.unlink(missing_ok=True)
 
     print(f"\n" + "=" * 60)
     print(f"🎉 SUCCESS! Release announcement package ready:")

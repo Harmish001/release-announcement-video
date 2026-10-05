@@ -142,7 +142,7 @@ def load_plan(path):
             a = s.get("action")
             if a not in ACTIONS:
                 die(f"feature {i} step {j}: unknown action '{a}'. Valid: {sorted(ACTIONS)}")
-                need = {"goto": "url", "click": "selector", "type": "selector", "press": "key",
+            need = {"goto": "url", "click": "selector", "type": "selector", "press": "key",
                     "hover": "selector", "highlight": "selector", "upload": "selector"}.get(a)
             if need and need not in s:
                 die(f"feature {i} step {j} ({a}) needs '{need}'")
@@ -1021,7 +1021,11 @@ def write_thumbnail(browser, plan, shot_path, dest):
     pg = ctx.new_page()
     pg.set_content(thumbnail_html(plan, shot_uri))
     pg.wait_for_timeout(150)
-    pg.screenshot(path=str(dest))
+    is_jpeg = Path(dest).suffix.lower() in (".jpg", ".jpeg")
+    screenshot_opts = {"path": str(dest)}
+    if is_jpeg:
+        screenshot_opts.update(type="jpeg", quality=90)
+    pg.screenshot(**screenshot_opts)
     ctx.close()
 
 
@@ -1210,7 +1214,7 @@ def main():
                 ensure_min_duration(clip, seconds_for_narration(need) if need else None, W, H)
                 cache_store(cache_dir, key, clip)
             clips.append(clip)
-        thumb = out.parent / "thumbnail.png"
+        thumb = out.parent / "thumbnail.jpg"
         write_thumbnail(browser, plan, shot_path, thumb)
         browser.close()
     clips.append(outro)
@@ -1225,30 +1229,44 @@ def main():
     if tts_clips:
         merge_voiceover_into_video(out, tts_clips, clip_durs, total)
 
-    gif_path = out.with_suffix(".gif")
-    write_gif(out, gif_path)
-    srt_path, vtt_path = write_subtitles(out, plan, clip_durs, audio_by_key)
     announcement = write_announcement(out.parent / "announcement.md", plan, clip_durs)
-    timings = out.parent / "timings.json"
-    chapters = youtube_chapter_lines(chapter_labels(plan), clip_durs)
-    timings.write_text(json.dumps({
-        "durations": [round(d, 3) for d in clip_durs],
-        "offsets": [round(x, 3) for x in clip_offsets(clip_durs)],
-        "chapters": chapters,
-    }, indent=2) + "\n", encoding="utf-8")
 
-    if not a.keep_work:
+    if a.keep_work:
+        gif_path = out.with_suffix(".gif")
+        write_gif(out, gif_path)
+        srt_path, vtt_path = write_subtitles(out, plan, clip_durs, audio_by_key)
+        timings = out.parent / "timings.json"
+        chapters = youtube_chapter_lines(chapter_labels(plan), clip_durs)
+        timings.write_text(json.dumps({
+            "durations": [round(d, 3) for d in clip_durs],
+            "offsets": [round(x, 3) for x in clip_offsets(clip_durs)],
+            "chapters": chapters,
+        }, indent=2) + "\n", encoding="utf-8")
+    else:
         shutil.rmtree(work, ignore_errors=True)
+        shutil.rmtree(cache_dir, ignore_errors=True)
+        # Ensure ONLY .mp4, .md, and .jpg files remain in the output folder
+        for item in list(out.parent.iterdir()):
+            if item.is_dir():
+                shutil.rmtree(item, ignore_errors=True)
+            elif item.is_file():
+                if item.suffix.lower() not in (".mp4", ".md", ".jpg", ".jpeg"):
+                    item.unlink(missing_ok=True)
 
     warn = []
     if total > 60:
         warn.append(f"video is {total:.0f}s; social announcements usually work best under 45s. Trim features or raise 'speed'.")
-    print(json.dumps({
-        "ok": True, "video": str(out), "thumbnail": str(thumb), "gif": str(gif_path),
-        "subtitles": [str(srt_path), str(vtt_path)], "announcement": str(announcement),
-        "plan": str(plan_path), "seconds": round(total, 1), "format": plan["format"],
-        "chapters": chapters, "warnings": warn,
-    }, indent=2))
+    res = {
+        "ok": True, "video": str(out), "thumbnail": str(thumb),
+        "announcement": str(announcement),
+        "seconds": round(total, 1), "format": plan["format"], "warnings": warn,
+    }
+    if a.keep_work:
+        res["gif"] = str(out.with_suffix(".gif"))
+        res["subtitles"] = [str(out.with_suffix(".srt")), str(out.with_suffix(".vtt"))]
+        res["plan"] = str(plan_path)
+        res["chapters"] = youtube_chapter_lines(chapter_labels(plan), clip_durs)
+    print(json.dumps(res, indent=2))
 
 
 if __name__ == "__main__":
