@@ -1,6 +1,6 @@
 # Running on every release (CI)
 
-Status: **untested sketch.** The renderer itself is tested locally; this workflow wiring has not been run on GitHub Actions. Expect to adjust it.
+The renderer smoke test is `.github/workflows/smoke.yml` (`python -m unittest tests.test_common`). The release-attachment sketch below has not been run on GitHub Actions. Expect to adjust it.
 
 The idea: on every pushed tag, build the app, serve it, have Claude Code write the plan from the diff, render, and attach the MP4 to the GitHub release.
 

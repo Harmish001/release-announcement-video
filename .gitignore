@@ -6,5 +6,7 @@ __pycache__/
 .cursor/
 .windsurf/
 public/announcement-videos/
+tests/fixtures/out/
+.cache/
 dist/
 *.log

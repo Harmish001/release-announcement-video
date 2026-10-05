@@ -1,71 +1,55 @@
 ---
 name: release-announcement-video
-description: Turn a software release or feature into a ready-to-post Full HD announcement or tutorial video plus social copy. Reads git changes or inspects the live UI, records high-fidelity feature walkthroughs in a real browser (animated cursor, click ripples/glows/sparkles, captions, spotlight), matches the site's brand theme color, adds synchronized voice-over audio, and renders a 1080p Full HD MP4 in landscape (YouTube, X, LinkedIn) or vertical (Shorts, Reels, TikTok). Use this whenever the user types /release-announcement-video, /release-video, or asks for a release video, tutorial video, how-to-use walkthrough, changelog video, "what's new" clip, feature demo, or product announcement.
-compatibility: Needs python3, playwright with Chromium, and ffmpeg/ffprobe on PATH. edge-tts is used for synchronized voiceover audio.
+description: Turn a software release or feature into a ready-to-post announcement or tutorial video plus social copy. Reads git changes or inspects the live UI, records a browser walkthrough, matches the site accent when asked, adds edge-tts voice-over, and renders landscape, vertical, or square MP4. Use when the user asks for a release video, tutorial video, how-to walkthrough, changelog video, what's-new clip, feature demo, or product announcement.
+compatibility: Needs python3, playwright with Chromium, and ffmpeg/ffprobe on PATH. edge-tts is used for voice-over. Version lives in package.json.
 ---
 
-# Release Announcement & Tutorial Video Generator (v2.1)
+# Release announcement video
 
-A release or feature goes in; a stunning **1080p Full HD video**, **thumbnail preview**, and ready-to-post **social copy (YouTube, 𝕏/Twitter, LinkedIn, Changelog)** come out.
+The agent writes the plan and checks the frames. The scripts render. Auto mode is a draft, not the source of truth.
 
----
+## Workflow
 
-## 🎯 Slash Command & AI Agent Instructions
+1. Read the change (`python scripts/gather_release.py`) and the live page (`python scripts/inspect_page.py <url>`). Copy selectors from that JSON.
+2. Write `public/announcement-videos/<seq>_<slug>/plan.json`. Put the spoken line in `narration` and a short on-screen line in `caption`. See `references/plan-format.md`.
+3. Validate: `python scripts/make_video.py <plan.json> --validate-only`
+4. Render: `python scripts/make_video.py <plan.json> -o <dir>/video.mp4`
+5. Open `thumbnail.png` and the failure screenshots if the render exited non-zero. Fix the plan. Render again. Unchanged scenes are reused from `<dir>/.cache`.
 
-When triggered via slash command (`/release-announcement-video`, `/release-video`, `/announce-release`) or when asked to make a tutorial / how-to video:
+`python scripts/auto_release.py --url <url> --dry-run` only builds a draft plan and checks selectors. Do not record until the dry-run is clean and the steps match the page.
 
-### How to Process User Intent:
-1. **Tutorial / "How to Use" / Specific Feature Walkthrough:**
-   - If the user specifies a tool or specific user flow (e.g. `create a video showing how to use the export tool on http://localhost:3000` or `make a walkthrough for the signup flow`):
-     - **Step 1:** Inspect the page (`python scripts/inspect_page.py <url>`) or review the workspace source code (`tools/`, `components/`, `pages/`, `app/`) to understand the exact interactive steps (inputs, buttons, uploads, dropdowns, result outputs).
-     - **Step 2:** Write a clean, realistic `plan.json` under `public/announcement-videos/<seq>_<slug>/plan.json` covering the full end-to-end user journey with clear benefit-driven captions.
-     - **Step 3:** Render the 1080p video:
-       ```bash
-       python scripts/make_video.py public/announcement-videos/<seq>_<slug>/plan.json -o public/announcement-videos/<seq>_<slug>/video.mp4
-       ```
-     - **Step 4:** Generate `announcement.md` containing YouTube Title/Description/Tags, 𝕏/Twitter, LinkedIn, and Markdown changelog copy.
+Output stays in `public/announcement-videos/`. Keep that path gitignored so the mp4s do not enter the app bundle or git history.
 
-2. **Automated 1-Command Release Discovery:**
-   - When announcing general releases or git updates:
-     ```bash
-     python scripts/auto_release.py --url <url> [--format landscape|vertical]
-     ```
+## Rules
 
----
+- Selectors come from `inspect_page.py` or the DOM. Do not guess.
+- Vertical video uses a phone viewport (390x844, device scale 3) and scales up to 1080x1920. Do not set a 1080x1920 CSS viewport.
+- `accent: "auto"` reads the live site. A hex in the plan, including `#6366f1`, is kept.
+- Voice-over is edge-tts. Each scene is lengthened to fit the measured clip. `narration` is what is spoken. `caption` is what is on screen.
+- Click and highlight zoom toward the target (`zoom` in the plan or on a step). Set `zoom` to `1` to turn that off.
+- `nav_transition` is `fade`, `slide`, or `zoom`.
+- `--before-after` adds a before card from the previous tag. It does not checkout the worktree. To film the old UI, serve that tag and pass `--before-url`.
+- `capture: "frames"` records a CDP screencast instead of Playwright's webm when the webm looks soft.
+- Logged-in apps need `storage_state` from a demo account. Auto mode will not choose delete, pay, checkout, or logout controls. Other clicks still change data.
 
-## ⚡ Key Features & Quality Standards
+## Failure
 
-- **📺 1080p Full HD Video**: Pristine crisp rendering (1920x1080 landscape, 1080x1920 vertical) with H.264 high profile.
-- **🎨 Auto-Extracted Brand Theme**: Inspects the site's live DOM, CSS variables, and buttons to match the exact brand accent color for cards, glow ripples, badges, and highlights.
-- **🎙️ Synchronized AI Voice-Over**: Captions and headlines are narrated with neural TTS and delayed to synchronize with each scene.
-- **📁 Clean 3-File Folder Structure**: Each output directory under `public/announcement-videos/<folder_name>/` contains:
-  1. `video.mp4` (or `<name>.mp4`)
-  2. `thumbnail.png` (high-res video thumbnail / contact sheet)
-  3. `announcement.md` (complete YouTube details, social copy, changelog)
-  *(All temporary and plan files are cleaned up automatically)*.
+A bad step exits non-zero, prints the feature index, the step, and the Playwright error, and saves a screenshot under the `rav_*/failures` folder next to the output. `plan.json` is not deleted.
 
----
+## Feedback
 
-## 🛠️ Options & Customizations
+Re-render the same plan. Only scenes whose inputs changed are recorded again.
 
-| Flag / Plan field | Values | Description |
-|---|---|---|
-| `--format` / `format` | `landscape` (1920x1080) · `vertical` (1080x1920) | Aspect ratio for YouTube/Web vs Shorts/Reels |
-| `--click-effect` / `click_effect` | `ripple` (default) · `sparkle` · `glow` | Click animation injected into browser frames |
-| `--nav-transition` / `nav_transition` | `fade` (default) · `slide` · `zoom` | Smooth transition on page navigation |
-| `--voiceover-voice` | e.g. `en-US-AriaNeural`, `en-US-GuyNeural` | edge-tts voice selection |
-| `--accent` | e.g. `#f97316` | Override brand color (defaults to auto-extract) |
-
----
-
-## 📦 Distribution & Installation
-
-Install into any project or AI agent workspace:
 ```bash
-npx release-announcement-video add
-```
-Or generate directly:
-```bash
-npx release-announcement-video generate --url http://localhost:3000
+python scripts/make_video.py plan.json -o video.mp4 --note "zoom more"
+python scripts/make_video.py plan.json -o video.mp4 --note "zoom less"
+python scripts/make_video.py plan.json -o video.mp4 --note "shorten the intro"
+python scripts/make_video.py plan.json -o video.mp4 --note "shorten the outro"
+python scripts/make_video.py plan.json -o video.mp4 --note "shorten"
 ```
 
+Any other note exits 2. Edit `plan.json` for that change (a caption, a selector, `narration`, `hold_ms`). A scene cannot be shorter than its narration.
+
+## Output
+
+Next to the mp4: `thumbnail.png` (1280x720 title plus a product shot), `preview` is `<name>.gif`, `<name>.srt`, `<name>.vtt`, `announcement.md` (YouTube chapters from the clip lengths), `timings.json`, and `plan.json`.

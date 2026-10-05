@@ -3,11 +3,11 @@
 
   make_video.py plan.json -o out.mp4
 
-Pipeline: validate plan -> extract site theme color -> render intro/outro
-cards (Playwright screenshots) -> record each feature flow in headless
-Chromium (injected cursor, sparkle/ripple/glow click effects, smooth page
-transitions, captions, spotlight) -> TTS voice-over via edge-tts -> encode
-and crossfade everything with ffmpeg -> write a contact sheet PNG.
+Pipeline: validate plan -> measure TTS (edge-tts) and size scenes to fit ->
+extract site theme color when accent is "auto" -> record animated intro/outro
+cards and each feature (cursor, click effect, slide/fade/zoom, captions,
+spotlight, zoom toward the target) -> encode, crossfade, mix voice over
+music -> write thumbnail, gif, srt/vtt, and announcement.md. plan.json is kept.
 
 Requires: python3, playwright (+ chromium), ffmpeg/ffprobe on PATH.
 Optional:  edge-tts (pip install edge-tts) for voice-over.
@@ -16,16 +16,21 @@ Plan format: see references/plan-format.md
 New plan.json fields (all optional):
   click_effect      "ripple" (default) | "sparkle" | "glow"
   nav_transition    "fade" (default) | "slide" | "zoom"
-  voiceover         false (default) | true  -- requires edge-tts
+  voiceover         true (default) | false  -- requires edge-tts
+  narration         per feature, spoken instead of the short caption
+  zoom              camera scale on click/highlight, default 1.28
+  capture           "video" (default) | "frames" (CDP screencast)
+  accent            "auto" (default) or an explicit hex. #6366f1 is not auto.
   voiceover_voice   edge-tts voice name, default "en-US-AriaNeural"
   custom_effects    list of {effect, selector} objects applied on every page
                     effect: "sparkle" | "glow" | "pulse"
 """
 import argparse
 import asyncio
+import base64
 import html
 import json
-import os
+import mimetypes
 import shutil
 import subprocess
 import sys
@@ -33,15 +38,47 @@ import tempfile
 import time
 from pathlib import Path
 
+from common import (
+    DEMO_WARNING,
+    FALLBACK_ACCENT,
+    PHONE,
+    XFADE,
+    accent_is_auto,
+    apply_narration_timing,
+    apply_note,
+    chapter_labels,
+    clip_offsets,
+    default_dpr,
+    default_viewport,
+    narration_lines,
+    output_size,
+    seconds_for_narration,
+    package_version,
+    scene_hash,
+    voice_mix_filter,
+    write_announcement,
+    write_subtitles,
+    youtube_chapter_lines,
+)
+
 # Ensure UTF-8 output on Windows consoles
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
-ACTIONS = {"goto", "wait", "click", "type", "press", "hover", "scroll", "highlight", "caption"}
+ACTIONS = {"goto", "wait", "click", "type", "press", "hover", "scroll", "highlight", "caption", "upload"}
 FPS = 30
-XFADE = 0.4
+COOKIE_SELECTORS = [
+    "button:has-text('Accept All')",
+    "button:has-text('Accept all')",
+    "button:has-text('Accept')",
+    "button:has-text('Agree')",
+    "button:has-text('Got it')",
+    "button:has-text('I agree')",
+    "button:has-text('Allow all')",
+    "button:has-text('Decline')",
+]
 
 
 # --------------------------------------------------------------------------- plan
@@ -58,33 +95,46 @@ def load_plan(path):
             die(f"plan is missing required field '{key}'")
     plan.setdefault("version", "")
     plan.setdefault("subhead", "")
-    plan.setdefault("accent", "#6366f1")
+    plan.setdefault("accent", "auto")
     plan.setdefault("bullets", [])
     plan.setdefault("cta", "")
     plan.setdefault("format", "landscape")
     plan.setdefault("intro_seconds", 3.0)
     plan.setdefault("outro_seconds", 3.5)
-    # New fields
     plan.setdefault("click_effect", "ripple")      # ripple | sparkle | glow
     plan.setdefault("nav_transition", "fade")       # fade | slide | zoom
-    plan.setdefault("voiceover", True)              # enable voice-over by default when TTS is available
+    plan.setdefault("voiceover", True)
     plan.setdefault("voiceover_voice", "en-US-AriaNeural")
-    plan.setdefault("custom_effects", [])           # [{effect, selector}, ...]
-    if plan["format"] not in ("landscape", "vertical"):
-        die("format must be 'landscape' or 'vertical'")
-    vertical = plan["format"] == "vertical"
-    # Full HD (1080p) defaults
-    plan.setdefault("viewport", {"width": 1080, "height": 1920} if vertical else {"width": 1920, "height": 1080})
-    plan.setdefault("cursor", "tap" if vertical else "arrow")
+    plan.setdefault("custom_effects", [])
+    plan.setdefault("zoom", 1.28)
+    plan.setdefault("capture", "video")             # video | frames (CDP screencast)
+    if plan["format"] not in ("landscape", "vertical", "square"):
+        die("format must be 'landscape', 'vertical' or 'square'")
+    fmt = plan["format"]
+    # 1080x1920 CSS pixels trigger desktop layouts. Phone CSS size + DPR instead.
+    if fmt == "vertical" and plan.get("viewport") in (None, {"width": 1080, "height": 1920}):
+        plan["viewport"] = dict(PHONE)
+        plan["device_scale_factor"] = default_dpr(fmt)
+    else:
+        plan.setdefault("viewport", default_viewport(fmt))
+        plan.setdefault("device_scale_factor", default_dpr(fmt))
+    plan.setdefault("cursor", "tap" if fmt == "vertical" else "arrow")
     if plan["cursor"] not in ("arrow", "tap", "none"):
         die("cursor must be 'arrow', 'tap' or 'none'")
     if plan["click_effect"] not in ("ripple", "sparkle", "glow"):
         die("click_effect must be 'ripple', 'sparkle' or 'glow'")
     if plan["nav_transition"] not in ("fade", "slide", "zoom"):
         die("nav_transition must be 'fade', 'slide' or 'zoom'")
+    if plan["capture"] not in ("video", "frames"):
+        die("capture must be 'video' or 'frames'")
     base = plan.get("base_url", "").rstrip("/")
     plan["base_url"] = base
     for i, feat in enumerate(plan["features"]):
+        if feat.get("card"):
+            if not (feat["card"].get("title") or feat["card"].get("lines")):
+                die(f"feature {i} card needs 'title' or 'lines'")
+            feat.setdefault("steps", [])
+            continue
         steps = feat.get("steps") or []
         if not steps:
             die(f"feature {i} has no steps")
@@ -92,12 +142,14 @@ def load_plan(path):
             a = s.get("action")
             if a not in ACTIONS:
                 die(f"feature {i} step {j}: unknown action '{a}'. Valid: {sorted(ACTIONS)}")
-            need = {"goto": "url", "click": "selector", "type": "selector", "press": "key",
-                    "hover": "selector", "highlight": "selector"}.get(a)
+                need = {"goto": "url", "click": "selector", "type": "selector", "press": "key",
+                    "hover": "selector", "highlight": "selector", "upload": "selector"}.get(a)
             if need and need not in s:
                 die(f"feature {i} step {j} ({a}) needs '{need}'")
             if a == "type" and "text" not in s:
                 die(f"feature {i} step {j} (type) needs 'text'")
+            if a == "upload" and not s.get("files"):
+                die(f"feature {i} step {j} (upload) needs 'files'")
             if a == "scroll" and "y" not in s and "to" not in s:
                 die(f"feature {i} step {j} (scroll) needs 'y' or 'to'")
         if steps[0]["action"] != "goto":
@@ -228,12 +280,22 @@ li::before{content:'\\2713';flex:none;width:%(u52)dpx;height:%(u52)dpx;border-ra
   color:#fff;font-size:%(u32)dpx;font-weight:800;display:flex;align-items:center;justify-content:center;margin-top:2px}
 .cta{margin-top:%(u56)dpx;display:inline-block;align-self:flex-start;padding:%(u18)dpx %(u40)dpx;border-radius:999px;
   background:%(accent)s;color:#fff;font-size:%(u40)dpx;font-weight:700;box-shadow:0 %(u10)dpx %(u40)dpx %(accent)s66}
+.brand,h1,.sub,h2,li,.cta{animation:rise .65s ease both}
+.sub{animation-delay:.12s}
+h2{animation-delay:.08s}
+li:nth-child(1){animation-delay:.15s}
+li:nth-child(2){animation-delay:.25s}
+li:nth-child(3){animation-delay:.35s}
+li:nth-child(4){animation-delay:.45s}
+li:nth-child(5){animation-delay:.55s}
+.cta{animation-delay:.4s}
+@keyframes rise{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:none}}
 """
 
 
-def card_html(kind, plan, W, H, logo_uri):
+def card_html(kind, plan, W, H, logo_uri, title=None, lines=None):
     vertical = plan["format"] == "vertical"
-    unit = W / (1080 if vertical else 1920)
+    unit = W / (1080 if plan["format"] != "landscape" else 1920)
     u = {f"u{n}": round(n * unit) for n in (6, 8, 10, 16, 18, 22, 24, 26, 28, 30, 32, 34, 36, 38, 40, 52, 56, 64, 92)}
     if vertical:
         u["u92"] = round(100 * unit)  # tall canvas can take a slightly bigger headline
@@ -246,6 +308,9 @@ def card_html(kind, plan, W, H, logo_uri):
     if kind == "intro":
         sub = f'<div class="sub">{e(plan["subhead"])}</div>' if plan["subhead"] else ""
         body = f'{brand}<h1>{e(plan["headline"])}</h1>{sub}'
+    elif kind == "beat":
+        items = "".join(f"<li><span>{e(b)}</span></li>" for b in (lines or [])[:5])
+        body = f'{brand}<h2>{e(title or "Before")}</h2><ul>{items}</ul>'
     else:
         bullets = plan["bullets"] or [f["caption"] for f in plan["features"] if f.get("caption")]
         items = "".join(f"<li><span>{e(b)}</span></li>" for b in bullets[:5])
@@ -310,11 +375,39 @@ OVERLAY_JS = r"""
     setTimeout(() => el.remove(), 800);
   }
 
-  /* ---- veil for nav transitions ---- */
+  /* ---- veil for fade; slide and zoom move document.body so they survive as a new page ---- */
   function ensureVeil() {
     if (document.getElementById('__rv_nav_veil')) return;
     const v = document.createElement('div'); v.id = '__rv_nav_veil';
     document.documentElement.appendChild(v);
+  }
+  function stage() { return document.body || document.documentElement; }
+  function playIncoming() {
+    let fx = '';
+    try { fx = sessionStorage.getItem('__rv_nav') || ''; sessionStorage.removeItem('__rv_nav'); } catch (e) {}
+    if (!fx) return;
+    const body = stage();
+    if (fx === 'slide') {
+      body.style.transition = 'none';
+      body.style.transform = 'translateX(14%)';
+      requestAnimationFrame(() => {
+        body.style.transition = 'transform .35s ease';
+        body.style.transform = 'none';
+      });
+    } else if (fx === 'zoom') {
+      body.style.transformOrigin = '50% 40%';
+      body.style.transition = 'none';
+      body.style.transform = 'scale(.9)';
+      body.style.opacity = '.35';
+      requestAnimationFrame(() => {
+        body.style.transition = 'transform .35s ease, opacity .3s ease';
+        body.style.transform = 'none';
+        body.style.opacity = '1';
+      });
+    } else {
+      const v = document.getElementById('__rv_nav_veil');
+      if (v) { v.style.transition = 'none'; v.style.opacity = '1'; v.classList.add('on'); }
+    }
   }
 
   /* ---- CSS ---- */
@@ -378,14 +471,41 @@ OVERLAY_JS = r"""
       setTimeout(() => h.classList.remove('on'), Math.max(ms - 350, 100));
       setTimeout(() => h.remove(), ms + 100);
     };
-    /* nav veil control (called from Python side via page.evaluate) */
-    window.__rvNavIn = () => {
-      const v = document.getElementById('__rv_nav_veil'); if (!v) return;
-      v.style.transition = 'opacity 0.22s ease'; v.classList.add('on');
+    window.__rvZoomTo = (b, scale) => {
+      const body = stage();
+      const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
+      body.style.transformOrigin = cx + 'px ' + cy + 'px';
+      body.style.transition = 'transform .45s cubic-bezier(.2,.7,.2,1)';
+      body.style.transform = 'scale(' + scale + ')';
+    };
+    window.__rvZoomReset = () => {
+      const body = stage();
+      body.style.transition = 'transform .3s ease';
+      body.style.transform = 'none';
+    };
+    /* nav: fade uses the veil. slide and zoom transform body, then the next
+       document reads __rv_nav from sessionStorage and animates in. */
+    window.__rvNavIn = (fx) => {
+      try { sessionStorage.setItem('__rv_nav', fx || 'fade'); } catch (e) {}
+      const body = stage();
+      if (fx === 'slide') {
+        body.style.transition = 'transform .25s ease, opacity .25s ease';
+        body.style.transform = 'translateX(-12%)';
+        body.style.opacity = '.2';
+      } else if (fx === 'zoom') {
+        body.style.transformOrigin = '50% 40%';
+        body.style.transition = 'transform .25s ease, opacity .25s ease';
+        body.style.transform = 'scale(1.06)';
+        body.style.opacity = '0';
+      } else {
+        const v = document.getElementById('__rv_nav_veil');
+        if (!v) return;
+        v.style.transition = 'opacity 0.22s ease'; v.classList.add('on');
+      }
     };
     window.__rvNavOut = () => {
       const v = document.getElementById('__rv_nav_veil'); if (!v) return;
-      v.style.transition = 'opacity 0.28s ease'; v.classList.remove('on');
+      v.style.transition = 'opacity 0.28s ease'; v.classList.remove('on'); v.style.opacity = '0';
     };
     /* custom per-element effects from plan.custom_effects */
     window.__rvApplyCustomEffects = (effects) => {
@@ -415,6 +535,7 @@ OVERLAY_JS = r"""
       addEventListener('mousemove', (ev) => place(ev.clientX, ev.clientY), true);
     }
     try { const t = sessionStorage.getItem('__rv_cap'); if (t) window.__rvCaption(t); } catch (e) {}
+    playIncoming();
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount); else mount();
 })();
@@ -448,19 +569,57 @@ def overlay_script(plan):
 # --------------------------------------------------------------------------- nav transitions
 
 def nav_transition_in(page, nav_fx):
-    """Overlay the veil before navigation (fade/slide/zoom are all opacity-based for now)."""
     try:
-        page.evaluate("() => window.__rvNavIn && window.__rvNavIn()")
-        page.wait_for_timeout(260)
+        page.evaluate("(fx) => window.__rvNavIn && window.__rvNavIn(fx)", nav_fx)
+        page.wait_for_timeout(280)
     except Exception:
         pass
 
 
 def nav_transition_out(page, nav_fx):
-    """Remove the veil after the new page has rendered."""
+    """Fade-out of the veil. Slide and zoom play from the init script on the new document."""
     try:
-        page.evaluate("() => window.__rvNavOut && window.__rvNavOut()")
-        page.wait_for_timeout(320)
+        page.wait_for_timeout(360)
+        if nav_fx == "fade":
+            page.evaluate("() => window.__rvNavOut && window.__rvNavOut()")
+            page.wait_for_timeout(300)
+    except Exception:
+        pass
+
+
+def dismiss_cookies(page):
+    """Run after each navigation. A blank page has no banner."""
+    for sel in COOKIE_SELECTORS:
+        try:
+            el = page.locator(sel).first
+            if el.is_visible(timeout=200):
+                el.click(timeout=800)
+                page.wait_for_timeout(200)
+                return
+        except Exception:
+            continue
+
+
+def zoom_reset(page):
+    try:
+        page.evaluate("() => window.__rvZoomReset && window.__rvZoomReset()")
+    except Exception:
+        pass
+
+
+def zoom_to(page, box, plan, step):
+    raw = step.get("zoom", plan.get("zoom", 1.28))
+    if raw is False or raw is None:
+        return
+    try:
+        scale = float(raw)
+    except (TypeError, ValueError):
+        return
+    if scale <= 1.01 or not box:
+        return
+    try:
+        page.evaluate("([b,s]) => window.__rvZoomTo && window.__rvZoomTo(b, s)", [box, scale])
+        page.wait_for_timeout(480)
     except Exception:
         pass
 
@@ -474,23 +633,35 @@ def move_to(page, box, plan):
     return x, y
 
 
-def run_step(page, plan, step):
+def run_step(page, plan, step, shot_path=None):
     a = step["action"]
     nav_fx = plan.get("nav_transition", "fade")
+    if a != "wait":
+        zoom_reset(page)
     if "caption" in step and a != "caption":
         page.evaluate("t => window.__rvCaption && window.__rvCaption(t)", step["caption"])
     if a == "goto":
         nav_transition_in(page, nav_fx)
         page.goto(abs_url(plan, step["url"]), wait_until="load")
         nav_transition_out(page, nav_fx)
+        dismiss_cookies(page)
+        if shot_path is not None and not Path(shot_path).exists():
+            try:
+                page.screenshot(path=str(shot_path))
+            except Exception:
+                pass
     elif a == "wait":
         page.wait_for_timeout(int(step.get("ms", 800)))
+    elif a == "upload":
+        files = step["files"] if isinstance(step["files"], list) else [step["files"]]
+        page.locator(step["selector"]).first.set_input_files([str(Path(path).resolve()) for path in files])
     elif a in ("click", "hover", "type"):
         loc = page.locator(step["selector"]).first
         loc.wait_for(state="visible")
         loc.scroll_into_view_if_needed()
         page.wait_for_timeout(150)
-        x, y = move_to(page, loc.bounding_box(), plan)
+        box = loc.bounding_box()
+        x, y = move_to(page, box, plan)
         if a == "hover":
             page.wait_for_timeout(int(step.get("ms", 600)))
         else:
@@ -500,6 +671,7 @@ def run_step(page, plan, step):
                     "window.__rvClickAnim && window.__rvClickAnim(x,y); }",
                     [x, y])
             page.mouse.click(x, y)
+            zoom_to(page, box, plan, step)
             if a == "type":
                 if step.get("clear"):
                     page.keyboard.press("Control+A")
@@ -520,7 +692,9 @@ def run_step(page, plan, step):
         loc.scroll_into_view_if_needed()
         page.wait_for_timeout(250)
         ms = int(step.get("ms", 1500))
-        page.evaluate("([b,ms]) => window.__rvSpot && window.__rvSpot(b,ms)", [loc.bounding_box(), ms])
+        box = loc.bounding_box()
+        page.evaluate("([b,ms]) => window.__rvSpot && window.__rvSpot(b,ms)", [box, ms])
+        zoom_to(page, box, plan, step)
         page.wait_for_timeout(ms + 150)
     elif a == "caption":
         page.evaluate("t => window.__rvCaption && window.__rvCaption(t)", step.get("text", ""))
@@ -530,41 +704,75 @@ def run_step(page, plan, step):
     return done
 
 
-def record_feature(browser, plan, idx, feat, rec_dir, fail_dir):
+def even(n):
+    n = int(n)
+    return n if n % 2 == 0 else n - 1
+
+
+def record_context_opts(plan, rec_dir):
     vp = plan["viewport"]
-    mobile = plan["format"] == "vertical"
-    opts = dict(viewport=vp, record_video_dir=str(rec_dir), record_video_size=vp, device_scale_factor=1)
-    if mobile:
+    dpr = float(plan.get("device_scale_factor") or 1)
+    frames = plan.get("capture") == "frames"
+    opts = dict(viewport=vp, device_scale_factor=dpr)
+    if not frames:
+        opts["record_video_dir"] = str(rec_dir)
+        opts["record_video_size"] = {"width": even(vp["width"] * dpr), "height": even(vp["height"] * dpr)}
+    if plan["format"] == "vertical":
         opts.update(is_mobile=True, has_touch=True)
     if plan.get("color_scheme"):
         opts["color_scheme"] = plan["color_scheme"]
-    if plan.get("storage_state"):  # logged-in session saved by Playwright (use a demo account)
+    if plan.get("storage_state"):
         sp = Path(plan["storage_state"])
         if not sp.exists():
             die(f"storage_state file not found: {sp}")
         opts["storage_state"] = str(sp)
+        print(DEMO_WARNING, file=sys.stderr)
+    return opts
+
+
+def start_screencast(page, plan):
+    vp = plan["viewport"]
+    dpr = float(plan.get("device_scale_factor") or 1)
+    cdp = page.context.new_cdp_session(page)
+    frames = []
+
+    def on_frame(ev):
+        data = ev.get("data")
+        if data:
+            frames.append(data)
+        sid = ev.get("sessionId")
+        if sid is not None:
+            try:
+                cdp.send("Page.screencastFrameAck", {"sessionId": sid})
+            except Exception:
+                pass
+
+    cdp.on("Page.screencastFrame", on_frame)
+    cdp.send("Page.startScreencast", {
+        "format": "jpeg",
+        "quality": 90,
+        "maxWidth": even(vp["width"] * dpr),
+        "maxHeight": even(vp["height"] * dpr),
+        "everyNthFrame": 1,
+    })
+    return cdp, frames
+
+
+def record_feature(browser, plan, idx, feat, rec_dir, fail_dir, shot_path=None):
+    opts = record_context_opts(plan, rec_dir)
     ctx = browser.new_context(**opts)
     ctx.add_init_script(overlay_script(plan))
     page = ctx.new_page()
     page.set_default_timeout(7000)
-    # Dismiss cookie/consent banners before any interaction
-    try:
-        for sel in ["button:has-text('Accept All')", "button:has-text('Accept')",
-                    "button:has-text('Agree')", "button:has-text('Got it')",
-                    "[aria-label='Close']", "button:has-text('Decline')"]:
-            el = page.locator(sel).first
-            if el.is_visible(timeout=800):
-                el.click()
-                page.wait_for_timeout(300)
-                break
-    except Exception:
-        pass
+    cdp = frames = None
+    if plan.get("capture") == "frames":
+        cdp, frames = start_screencast(page, plan)
     t_page = time.monotonic()
     trim = 0.0
     try:
         for j, step in enumerate(feat["steps"]):
             try:
-                done = run_step(page, plan, step)
+                done = run_step(page, plan, step, shot_path)
             except Exception as exc:  # fail loudly: a video with a silently skipped step is misleading
                 shot = fail_dir / f"feature{idx}_step{j}.png"
                 try:
@@ -583,7 +791,6 @@ def record_feature(browser, plan, idx, feat, rec_dir, fail_dir):
                     page.wait_for_load_state("networkidle", timeout=3000)
                 except Exception:
                     pass  # dev servers with HMR sockets never go idle; that's fine
-                # Apply custom per-element effects from plan
                 custom_effects = plan.get("custom_effects", [])
                 if custom_effects:
                     page.evaluate(
@@ -596,20 +803,33 @@ def record_feature(browser, plan, idx, feat, rec_dir, fail_dir):
         except Exception:
             pass
         raise
+    if cdp is not None:
+        try:
+            cdp.send("Page.stopScreencast")
+        except Exception:
+            pass
+        page.wait_for_timeout(200)
     video = page.video
     ctx.close()
-    return Path(video.path()), trim
+    if frames is not None:
+        if len(frames) < 2:
+            die(f"feature {idx}: CDP screencast captured {len(frames)} frames")
+        fdir = rec_dir / "frames"
+        fdir.mkdir(parents=True, exist_ok=True)
+        for i, blob in enumerate(frames):
+            (fdir / f"f{i:05d}.jpg").write_bytes(base64.b64decode(blob))
+        return fdir, 0.0, "frames"
+    return Path(video.path()), trim, "video"
 
 
 # --------------------------------------------------------------------------- voice-over (edge-tts)
 
 # --------------------------------------------------------------------------- voice-over (edge-tts)
 
-def generate_voiceover(plan, work_dir):
-    """Generate TTS audio using edge-tts for intro headline + each feature caption.
+def generate_voiceover(plan, work_dir, cache_dir=None):
+    """TTS first, then the caller sizes scenes from the measured lengths.
 
-    Returns list of dicts with key, clip_idx, and mp3 path, or None if disabled/unavailable.
-    Install with: pip install edge-tts
+    Returns list of dicts with key, clip_idx, file, audio_s — or None.
     """
     if not plan.get("voiceover"):
         return None
@@ -622,23 +842,7 @@ def generate_voiceover(plan, work_dir):
     voice = plan.get("voiceover_voice", "en-US-AriaNeural")
     tts_dir = work_dir / "tts"
     tts_dir.mkdir(exist_ok=True)
-
-    items = []
-    if plan.get("headline"):
-        intro_text = f"{plan.get('product', '')}: {plan['headline']}" if plan.get("product") else plan["headline"]
-        items.append({"key": "intro", "clip_idx": 0, "text": intro_text})
-    for i, feat in enumerate(plan["features"]):
-        text = feat.get("caption", "")
-        if text:
-            items.append({"key": f"feat{i}", "clip_idx": i + 1, "text": text})
-    
-    outro_idx = len(plan["features"]) + 1
-    if plan.get("version") and plan["version"].lower() not in ("latest", "head"):
-        items.append({"key": "outro", "clip_idx": outro_idx, "text": f"What's new in {plan['version']}. Check it out today!"})
-    elif plan.get("cta"):
-        items.append({"key": "outro", "clip_idx": outro_idx, "text": f"Try it now at {plan['cta']}."})
-    else:
-        items.append({"key": "outro", "clip_idx": outro_idx, "text": "Explore all the latest updates today!"})
+    items = narration_lines(plan)
 
     async def _gen_all():
         import edge_tts as et
@@ -648,12 +852,22 @@ def generate_voiceover(plan, work_dir):
             if not text:
                 continue
             mp3_path = tts_dir / f"{item['key']}.mp3"
+            cached = None
+            if cache_dir is not None:
+                cached = cache_dir / "tts" / f"{scene_hash({'v': voice, 't': text})}.mp3"
             try:
-                comm = et.Communicate(text, voice)
-                await comm.save(str(mp3_path))
+                if cached is not None and cached.exists() and cached.stat().st_size > 100:
+                    shutil.copy(cached, mp3_path)
+                else:
+                    comm = et.Communicate(text, voice)
+                    await comm.save(str(mp3_path))
+                    if cached is not None:
+                        cached.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy(mp3_path, cached)
                 item["file"] = str(mp3_path)
+                item["audio_s"] = duration(mp3_path)
                 results.append(item)
-                print(f"[voiceover] Generated TTS for '{item['key']}': {text[:40]}...", file=sys.stderr)
+                print(f"[voiceover] {item['key']} {item['audio_s']:.2f}s: {text[:40]}", file=sys.stderr)
             except Exception as exc:
                 print(f"[voiceover] TTS failed for '{item['key']}': {exc}", file=sys.stderr)
         return results
@@ -667,52 +881,41 @@ def generate_voiceover(plan, work_dir):
     return clips if clips else None
 
 
-def merge_voiceover_into_video(video_path, tts_items, clip_durations, total_dur, work_dir, music=None):
-    """Align TTS clips to their exact segment timestamps using ffmpeg adelay and amix."""
+def has_audio_stream(path):
+    r = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=index", "-of", "csv=p=0", str(path)],
+        capture_output=True, text=True,
+    )
+    return r.returncode == 0 and bool(r.stdout.strip())
+
+
+def merge_voiceover_into_video(video_path, tts_items, clip_durations, total_dur):
+    """Place each voice clip on its scene. Keep background music when the video already has it."""
     if not tts_items:
         return
 
-    # Calculate start offset for each video clip index
-    # clip 0: intro (starts at 0.0)
-    # clip k: starts at sum(durs[0..k-1]) - k * XFADE
-    offsets = [0.0]
-    acc = 0.0
-    for i in range(len(clip_durations) - 1):
-        acc += clip_durations[i] - XFADE
-        offsets.append(acc)
-
+    offsets = clip_offsets(clip_durations)
+    delays = []
     cmd = ["ffmpeg", "-y", "-i", str(video_path)]
-    filter_parts = []
-    mix_inputs = []
-
-    for idx, item in enumerate(tts_items):
+    for item in tts_items:
         c_idx = item["clip_idx"]
         start_sec = offsets[c_idx] if c_idx < len(offsets) else 0.0
-        # Add a slight 250ms breathing offset after transition starts
-        delay_ms = int(max(0, (start_sec + 0.25) * 1000))
-        input_num = idx + 1
+        delays.append(int(max(0, (start_sec + 0.25) * 1000)))
         cmd += ["-i", str(item["file"])]
-        filter_parts.append(f"[{input_num}:a]adelay={delay_ms}|{delay_ms}[a{idx}]")
-        mix_inputs.append(f"[a{idx}]")
-
-    if mix_inputs:
-        fade_out_st = max(total_dur - 1.2, 0)
-        filter_parts.append(
-            f"{''.join(mix_inputs)}amix=inputs={len(mix_inputs)}:normalize=0:dropout_transition=0,"
-            f"volume=1.35,afade=t=out:st={fade_out_st:.2f}:d=1.2[vo]"
-        )
-        fc = ";".join(filter_parts)
-
-        vo_tmp = video_path.with_suffix(".vo_tmp.mp4")
-        full_cmd = cmd + [
-            "-filter_complex", fc,
-            "-map", "0:v", "-map", "[vo]",
-            "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-            "-shortest", str(vo_tmp)
-        ]
-        run(full_cmd)
-        shutil.move(str(vo_tmp), str(video_path))
-        print(f"[voiceover] Synchronized voiceover audio merged into {video_path.name}", file=sys.stderr)
+    bed = has_audio_stream(video_path)
+    fc = voice_mix_filter(delays, with_bed=bed)
+    fade_out_st = max(total_dur - 1.2, 0)
+    fc += f";[aout]afade=t=out:st={fade_out_st:.2f}:d=1.2[af]"
+    vo_tmp = video_path.with_suffix(".vo_tmp.mp4")
+    cmd += [
+        "-filter_complex", fc,
+        "-map", "0:v", "-map", "[af]",
+        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+        "-t", f"{total_dur:.3f}", str(vo_tmp),
+    ]
+    run(cmd)
+    shutil.move(str(vo_tmp), str(video_path))
+    print(f"[voiceover] mixed voice{' + music' if bed else ''} into {video_path.name}", file=sys.stderr)
 
 
 # --------------------------------------------------------------------------- ffmpeg
@@ -729,17 +932,106 @@ def duration(path):
     return float(r.stdout.strip())
 
 
-def card_to_clip(png, secs, W, H, out):
-    run(["ffmpeg", "-y", "-loop", "1", "-i", str(png), "-t", str(secs), "-r", str(FPS),
-         "-vf", f"scale={W}:{H},format=yuv420p", "-c:v", "libx264", "-crf", "14", "-preset", "slow", "-an", str(out)])
+def fit_vf(W, H, cover, speed):
+    if cover:
+        scale = f"scale={W}:{H}:force_original_aspect_ratio=increase:flags=lanczos,crop={W}:{H}"
+    else:
+        scale = f"scale={W}:{H}:flags=lanczos"
+    vf = f"{scale},fps={FPS},format=yuv420p"
+    if speed and float(speed) != 1:
+        vf = f"setpts=PTS/{float(speed)}," + vf
+    return vf
 
 
-def recording_to_clip(webm, trim, speed, W, H, out):
-    vf = f"scale={W}:{H}:flags=lanczos,fps={FPS},format=yuv420p"
-    if speed and speed != 1:
-        vf = f"setpts=PTS/{speed}," + vf
-    run(["ffmpeg", "-y", "-ss", f"{trim:.2f}", "-i", str(webm), "-vf", vf,
+def recording_to_clip(webm, trim, speed, W, H, out, cover=False):
+    run(["ffmpeg", "-y", "-ss", f"{trim:.2f}", "-i", str(webm), "-vf", fit_vf(W, H, cover, speed),
          "-c:v", "libx264", "-crf", "14", "-preset", "slow", "-an", str(out)])
+
+
+def frames_to_clip(frame_dir, speed, W, H, out, cover=False):
+    run(["ffmpeg", "-y", "-framerate", str(FPS), "-i", str(frame_dir / "f%05d.jpg"),
+         "-vf", fit_vf(W, H, cover, speed),
+         "-c:v", "libx264", "-crf", "14", "-preset", "slow", "-an", str(out)])
+
+
+def ensure_min_duration(clip, need, W, H):
+    if not need:
+        return
+    have = duration(clip)
+    if have + 0.05 >= need:
+        return
+    extra = need - have
+    tmp = clip.with_suffix(".pad.mp4")
+    run(["ffmpeg", "-y", "-i", str(clip), "-vf",
+         f"tpad=stop_mode=clone:stop_duration={extra:.3f},scale={W}:{H},format=yuv420p",
+         "-c:v", "libx264", "-crf", "14", "-preset", "slow", "-an", str(tmp)])
+    shutil.move(str(tmp), str(clip))
+
+
+def cache_hit(cache_dir, key, dest):
+    src = cache_dir / f"{key}.mp4"
+    if src.exists() and src.stat().st_size > 1000:
+        shutil.copy(src, dest)
+        print(f"[cache] {key}", file=sys.stderr)
+        return True
+    return False
+
+
+def cache_store(cache_dir, key, src):
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy(src, cache_dir / f"{key}.mp4")
+
+
+def record_card(browser, markup, secs, W, H, rec_dir):
+    rec_dir.mkdir(parents=True, exist_ok=True)
+    ctx = browser.new_context(
+        viewport={"width": W, "height": H},
+        record_video_dir=str(rec_dir),
+        record_video_size={"width": W, "height": H},
+    )
+    pg = ctx.new_page()
+    pg.set_content(markup)
+    pg.wait_for_timeout(max(int(float(secs) * 1000), 1200))
+    video = pg.video
+    ctx.close()
+    return Path(video.path())
+
+
+def thumbnail_html(plan, shot_uri):
+    e = html.escape
+    img = f'<img src="{shot_uri}" alt="">' if shot_uri else ""
+    return f"""<!doctype html><meta charset="utf-8"><style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+html,body{{width:1280px;height:720px;overflow:hidden;background:#0b0d17;color:#f5f6fa;
+  font-family:Inter,'Segoe UI',Arial,sans-serif;display:flex}}
+.copy{{width:{520 if shot_uri else 1280}px;padding:64px 48px;display:flex;flex-direction:column;justify-content:center}}
+.kicker{{color:{plan['accent']};font-weight:700;letter-spacing:.06em;font-size:20px}}
+h1{{font-size:52px;line-height:1.05;margin-top:18px;font-weight:800}}
+img{{width:760px;height:720px;object-fit:cover;object-position:left top}}
+</style><body><div class="copy"><div class="kicker">{e(plan.get('product') or '')} {e(plan.get('version') or '')}</div>
+<h1>{e(plan.get('headline') or '')}</h1></div>{img}</body>"""
+
+
+def write_thumbnail(browser, plan, shot_path, dest):
+    shot_uri = None
+    if shot_path and Path(shot_path).exists():
+        mime = mimetypes.guess_type(shot_path)[0] or "image/png"
+        shot_uri = f"data:{mime};base64,{base64.b64encode(Path(shot_path).read_bytes()).decode()}"
+    ctx = browser.new_context(viewport={"width": 1280, "height": 720}, device_scale_factor=1)
+    pg = ctx.new_page()
+    pg.set_content(thumbnail_html(plan, shot_uri))
+    pg.wait_for_timeout(150)
+    pg.screenshot(path=str(dest))
+    ctx.close()
+
+
+def write_gif(video, dest):
+    palette = dest.with_suffix(".palette.png")
+    vf = "fps=10,scale=640:-1:flags=lanczos"
+    run(["ffmpeg", "-y", "-t", "8", "-i", str(video), "-vf", vf + ",palettegen", str(palette)])
+    run(["ffmpeg", "-y", "-t", "8", "-i", str(video), "-i", str(palette),
+         "-lavfi", f"{vf}[x];[x][1:v]paletteuse", str(dest)])
+    palette.unlink(missing_ok=True)
 
 
 def assemble(clips, out, music=None):
@@ -775,19 +1067,54 @@ def assemble(clips, out, music=None):
     return total, durs
 
 
-def contact_sheet(video, total, out_png, vertical):
-    n = 12
-    fps = n / max(total, 1)
-    cols, rows = (6, 2) if not vertical else (6, 2)
-    w = 320 if not vertical else 180
-    run(["ffmpeg", "-y", "-i", str(video), "-vf",
-         f"fps={fps:.4f},scale={w}:-1,tile={cols}x{rows}:padding=4:color=black", "-frames:v", "1", str(out_png)])
+def resolve_accent(plan, force):
+    if plan.get("base_url") and (force or accent_is_auto(plan.get("accent"))):
+        extracted = extract_site_theme(plan["base_url"], plan)
+        if isinstance(extracted, str) and extracted.startswith("#") and len(extracted) >= 7:
+            if extracted.lower() != str(plan.get("accent", "")).lower():
+                print(f"[theme] {extracted}", file=sys.stderr)
+            plan["accent"] = extracted
+    if accent_is_auto(plan.get("accent")):
+        plan["accent"] = FALLBACK_ACCENT
+
+
+def feature_payload(plan, feat):
+    return {
+        "steps": feat.get("steps"),
+        "caption": feat.get("caption"),
+        "narration": feat.get("narration"),
+        "card": feat.get("card"),
+        "speed": feat.get("speed", 1),
+        "hold_ms": feat.get("hold_ms"),
+        "zoom": plan.get("zoom"),
+        "viewport": plan["viewport"],
+        "dpr": plan.get("device_scale_factor"),
+        "accent": plan["accent"],
+        "click_effect": plan["click_effect"],
+        "nav": plan["nav_transition"],
+        "cursor": plan["cursor"],
+        "format": plan["format"],
+        "capture": plan["capture"],
+        "effects": plan.get("custom_effects"),
+    }
+
+
+def card_payload(kind, plan, secs, W, H, title=None, lines=None):
+    return {
+        "kind": kind, "secs": round(float(secs), 2), "w": W, "h": H,
+        "title": title, "lines": lines,
+        "headline": plan.get("headline"), "subhead": plan.get("subhead"),
+        "product": plan.get("product"), "version": plan.get("version"),
+        "accent": plan["accent"], "bullets": plan.get("bullets"),
+        "cta": plan.get("cta"), "logo": plan.get("logo"),
+        "features": [f.get("caption") for f in plan["features"]],
+    }
 
 
 # --------------------------------------------------------------------------- main
 
 def main():
-    print("🎬 Release Announcement Video Renderer v2.1 (Full HD 1080p)")
+    print(f"Release announcement video renderer {package_version()}")
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("plan")
     ap.add_argument("-o", "--out", default=None)
@@ -795,70 +1122,96 @@ def main():
     ap.add_argument("--validate-only", action="store_true")
     ap.add_argument("--extract-theme", action="store_true",
                     help="Force theme color extraction from base_url (overrides any accent in plan)")
+    ap.add_argument("--note", action="append", default=[],
+                    help="Edit phrase: 'zoom more', 'zoom less', 'shorten the intro', 'shorten the outro', 'shorten'")
     a = ap.parse_args()
 
+    plan = load_plan(a.plan)
+    notes_applied = False
+    for note in a.note:
+        if not apply_note(plan, note):
+            die(f"unrecognized edit note: {note}. Try: zoom more, zoom less, shorten the intro, shorten the outro, shorten")
+        notes_applied = True
+    if a.validate_only:
+        print(json.dumps({"ok": True, "features": len(plan["features"]), "format": plan["format"],
+                          "viewport": plan["viewport"], "accent": plan["accent"]}))
+        return
     for tool in ("ffmpeg", "ffprobe"):
         if not shutil.which(tool):
             die(f"{tool} not found on PATH. Install ffmpeg first.")
-    plan = load_plan(a.plan)
-    if a.validate_only:
-        print(json.dumps({"ok": True, "features": len(plan["features"])}))
-        return
     try:
         from playwright.sync_api import sync_playwright
     except ImportError:
         die("playwright is not installed: pip install playwright && playwright install chromium")
 
-    # Auto-extract site theme color when accent is generic default or --extract-theme is given
-    if plan.get("base_url") and (a.extract_theme or plan.get("accent") == "#6366f1"):
-        extracted = extract_site_theme(plan["base_url"], plan)
-        if extracted and extracted != plan["accent"]:
-            print(f"[theme] Overriding accent with site color: {extracted}", file=sys.stderr)
-            plan["accent"] = extracted
+    resolve_accent(plan, a.extract_theme)
 
-    plan_dir = Path(a.plan).resolve().parent
-    out = Path(a.out) if a.out else plan_dir / (Path(a.plan).stem + ".mp4")
+    plan_path = Path(a.plan).resolve()
+    plan_dir = plan_path.parent
+    out = Path(a.out) if a.out else plan_dir / (plan_path.stem + ".mp4")
     out.parent.mkdir(parents=True, exist_ok=True)
-    vertical = plan["format"] == "vertical"
-    W, H = (1080, 1920) if vertical else (1920, 1080)
+    W, H = output_size(plan["format"])
+    cover = plan["format"] == "vertical"
+    cache_dir = out.parent / ".cache"
     work = Path(tempfile.mkdtemp(prefix="rav_", dir=out.parent))
     fail_dir = work / "failures"
     fail_dir.mkdir()
+    shot_path = work / "product.png"
+
+    tts_clips = generate_voiceover(plan, work, cache_dir)
+    audio_by_key = {}
+    if tts_clips:
+        audio_by_key = {item["key"]: item["audio_s"] for item in tts_clips if item.get("audio_s")}
+        apply_narration_timing(plan, audio_by_key)
+    if notes_applied:
+        plan_path.write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
 
     logo_uri = None
     if plan.get("logo"):
-        import base64, mimetypes
         lp = Path(plan["logo"])
         lp = lp if lp.is_absolute() else plan_dir / lp
         if lp.exists():
             logo_uri = f"data:{mimetypes.guess_type(lp)[0] or 'image/png'};base64,{base64.b64encode(lp.read_bytes()).decode()}"
 
+    def encode_card(browser, kind, secs, dest, title=None, lines=None):
+        key = scene_hash(card_payload(kind, plan, secs, W, H, title, lines))
+        if cache_hit(cache_dir, key, dest):
+            return
+        markup = card_html(kind, plan, W, H, logo_uri, title=title, lines=lines)
+        webm = record_card(browser, markup, secs, W, H, work / f"card_{dest.stem}")
+        recording_to_clip(webm, 0, 1, W, H, dest, cover=False)
+        cache_store(cache_dir, key, dest)
+
     clips = []
     with sync_playwright() as p:
         browser = p.chromium.launch()
-        # cards (intro + outro)
-        cctx = browser.new_context(viewport={"width": W, "height": H})
-        for kind, secs in (("intro", plan["intro_seconds"]), ("outro", plan["outro_seconds"])):
-            pg = cctx.new_page()
-            pg.set_content(card_html(kind, plan, W, H, logo_uri))
-            pg.wait_for_timeout(250)
-            png = work / f"{kind}.png"
-            pg.screenshot(path=str(png))
-            pg.close()
-            clip = work / f"{kind}.mp4"
-            card_to_clip(png, secs, W, H, clip)
-            if kind == "intro":
-                clips.insert(0, clip)
-            else:
-                outro = clip
-        cctx.close()
-        # features
+        intro = work / "intro.mp4"
+        outro = work / "outro.mp4"
+        encode_card(browser, "intro", plan["intro_seconds"], intro)
+        encode_card(browser, "outro", plan["outro_seconds"], outro)
+        clips.append(intro)
         for i, feat in enumerate(plan["features"]):
-            rec_dir = work / f"rec{i}"
-            webm, trim = record_feature(browser, plan, i, feat, rec_dir, fail_dir)
             clip = work / f"feature{i}.mp4"
-            recording_to_clip(webm, trim, feat.get("speed", 1), W, H, clip)
+            key = scene_hash(feature_payload(plan, feat))
+            if not cache_hit(cache_dir, key, clip):
+                if feat.get("card"):
+                    secs = max(2.5, int(feat.get("hold_ms") or 2500) / 1000)
+                    card = feat["card"]
+                    encode_card(browser, "beat", secs, clip, title=card.get("title"), lines=card.get("lines") or [])
+                else:
+                    rec_dir = work / f"rec{i}"
+                    src, trim, kind = record_feature(browser, plan, i, feat, rec_dir, fail_dir, shot_path)
+                    speed = feat.get("speed", 1)
+                    if kind == "frames":
+                        frames_to_clip(src, speed, W, H, clip, cover=cover)
+                    else:
+                        recording_to_clip(src, trim, speed, W, H, clip, cover=cover)
+                need = audio_by_key.get(f"feat{i}")
+                ensure_min_duration(clip, seconds_for_narration(need) if need else None, W, H)
+                cache_store(cache_dir, key, clip)
             clips.append(clip)
+        thumb = out.parent / "thumbnail.png"
+        write_thumbnail(browser, plan, shot_path, thumb)
         browser.close()
     clips.append(outro)
 
@@ -869,34 +1222,33 @@ def main():
         if not music.exists():
             die(f"music file not found: {music}")
     total, clip_durs = assemble(clips, out, music)
-
-    # Voice-over: generate TTS and merge precisely with clip timestamps
-    tts_clips = generate_voiceover(plan, work)
     if tts_clips:
-        merge_voiceover_into_video(out, tts_clips, clip_durs, total, work, music)
+        merge_voiceover_into_video(out, tts_clips, clip_durs, total)
 
-    # Save thumbnail.png in the target directory
-    thumbnail_path = out.parent / "thumbnail.png"
-    contact_sheet(out, total, thumbnail_path, vertical)
+    gif_path = out.with_suffix(".gif")
+    write_gif(out, gif_path)
+    srt_path, vtt_path = write_subtitles(out, plan, clip_durs, audio_by_key)
+    announcement = write_announcement(out.parent / "announcement.md", plan, clip_durs)
+    timings = out.parent / "timings.json"
+    chapters = youtube_chapter_lines(chapter_labels(plan), clip_durs)
+    timings.write_text(json.dumps({
+        "durations": [round(d, 3) for d in clip_durs],
+        "offsets": [round(x, 3) for x in clip_offsets(clip_durs)],
+        "chapters": chapters,
+    }, indent=2) + "\n", encoding="utf-8")
 
     if not a.keep_work:
         shutil.rmtree(work, ignore_errors=True)
-        # Clean up plan.json from output folder so only 3 files remain: mp4, thumbnail.png, announcement.md
-        plan_file = Path(a.plan).resolve()
-        if plan_file.exists() and plan_file.parent == out.parent:
-            plan_file.unlink(missing_ok=True)
-        # Remove any leftover contact sheet or rav_* temp dirs
-        old_contact = out.with_suffix(".contact.png")
-        if old_contact.exists() and old_contact != thumbnail_path:
-            old_contact.unlink(missing_ok=True)
-        for leftover in out.parent.glob("rav_*"):
-            shutil.rmtree(leftover, ignore_errors=True)
 
     warn = []
     if total > 60:
         warn.append(f"video is {total:.0f}s; social announcements usually work best under 45s. Trim features or raise 'speed'.")
-    print(json.dumps({"ok": True, "video": str(out), "thumbnail": str(thumbnail_path),
-                      "seconds": round(total, 1), "format": plan["format"], "warnings": warn}, indent=2))
+    print(json.dumps({
+        "ok": True, "video": str(out), "thumbnail": str(thumb), "gif": str(gif_path),
+        "subtitles": [str(srt_path), str(vtt_path)], "announcement": str(announcement),
+        "plan": str(plan_path), "seconds": round(total, 1), "format": plan["format"],
+        "chapters": chapters, "warnings": warn,
+    }, indent=2))
 
 
 if __name__ == "__main__":

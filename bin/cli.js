@@ -290,7 +290,10 @@ ${colors.bright}OPTIONS for 'generate':${colors.reset}
   ${colors.yellow}--repo <path>${colors.reset}        Path to repository (default: current directory)
   ${colors.yellow}--from <tag/commit>${colors.reset}  Starting git ref or previous release tag
   ${colors.yellow}--to <tag/commit>${colors.reset}    Target git ref or current release tag (default: HEAD)
-  ${colors.yellow}--format <fmt>${colors.reset}       Video format: ${colors.dim}landscape${colors.reset} (default) or ${colors.dim}vertical${colors.reset}
+  ${colors.yellow}--format <fmt>${colors.reset}       ${colors.dim}landscape${colors.reset} (default), ${colors.dim}vertical${colors.reset}, or ${colors.dim}square${colors.reset}
+  ${colors.yellow}--dry-run${colors.reset}            Check selectors and the denylist, do not record
+  ${colors.yellow}--before-after${colors.reset}      Before card from the previous tag (no checkout)
+  ${colors.yellow}--before-url <url>${colors.reset}  Film an already-running old build
   ${colors.yellow}--output <path>${colors.reset}      Output MP4 file path
 
 ${colors.bright}EXAMPLES:${colors.reset}

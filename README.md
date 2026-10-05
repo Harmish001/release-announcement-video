@@ -1,96 +1,59 @@
-# 🎬 Release Announcement & Tutorial Video Skill (v2.1)
+# Release announcement video
 
-[![Agent Skill](https://img.shields.io/badge/Agent%20Skill-Antigravity%20%7C%20Cursor%20%7C%20Claude%20%7C%20Windsurf-blue)](https://github.com)
-[![npm version](https://img.shields.io/badge/npm-npx%20release--announcement--video-red)](https://npmjs.com)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg)](https://python.org)
-[![Playwright](https://img.shields.io/badge/Playwright-Chromium-red.svg)](https://playwright.dev)
 
-Turn any git release, tag, or web feature into a **1080p Full HD announcement or tutorial video**, **thumbnail preview**, and **ready-to-post social media copy** (YouTube, 𝕏/Twitter, LinkedIn, and Markdown changelogs).
+Turn a git range or a live page into an announcement video, a 1280x720 thumbnail, subtitles, a short GIF, and social copy.
 
----
-
-## 🌟 Highlights & Capabilities
-
-- 📺 **1080p Full HD Resolution**: Crystal-clear 1920x1080 landscape (YouTube/Web) or 1080x1920 vertical (Shorts/Reels/TikTok).
-- 🎨 **Auto-Extracted Brand Theme**: Extracts your site's dominant brand accent color and matches all intro cards, badges, spotlights, and click animations.
-- 🎙️ **Synchronized Neural AI Voice-Over**: High-fidelity TTS (via `edge-tts`) narrated and synchronized with each scene and feature caption.
-- 📺 **Comprehensive YouTube Metadata**: Ready-to-use YouTube Title, Description (with timestamps, links, hashtags), Tags, and Category.
-- 📁 **Clean 3-File Output**: Each video folder contains strictly:
-  1. `video.mp4`
-  2. `thumbnail.png`
-  3. `announcement.md`
-
----
-
-## ⚡ Installation Options
-
-### Option A: Via NPX (Direct from NPM or GitHub)
-```bash
-# When published to npm:
-npx release-announcement-video add
-
-# Or directly from GitHub repository:
-npx github:Harmish001/release-announcement-video add
-```
-
-### Option B: Local CLI Link
-```bash
-# Run once in the skill folder:
-npm link
-
-# Then run from any project:
-release-announcement-video add
-```
-
-### Target Specific AI Agents / Code Editors:
-```bash
-npx release-announcement-video add --agent antigravity  # Antigravity / Gemini (.agents/skills/)
-npx release-announcement-video add --agent cursor       # Cursor IDE (.cursor/skills/)
-npx release-announcement-video add --agent claude       # Claude Code (.claude/skills/)
-npx release-announcement-video add --agent windsurf     # Windsurf / Cascade (.windsurf/skills/)
-npx release-announcement-video add --global             # Global installation
-```
-
----
-
-## 🤖 Using with AI Agents (`/release-announcement-video`)
-
-Trigger the skill in your AI Agent chat with slash commands or natural language:
-
-```text
-/release-announcement-video http://localhost:3000
-/release-announcement-video http://localhost:3000 create a video showing how to use the export tool
-/release-announcement-video http://localhost:3000 --format vertical
-```
-
----
-
-## 🎥 1-Command Video Generation (CLI)
+Version is `package.json` only. This repo does not publish a live npm version badge. From a checkout:
 
 ```bash
-# Via NPX:
-npx release-announcement-video generate --url http://localhost:3000
-
-# Or via Python:
-python scripts/auto_release.py --url http://localhost:3000
+node bin/cli.js add
+node bin/cli.js doctor
 ```
 
----
+`npx release-announcement-video add` works after the package is published. `node bin/cli.js help` is the local check that the CLI runs.
 
-## 📁 Output Structure
+![Sample](examples/preview.gif)
 
-Outputs are stored inside dedicated sequence folders under `public/announcement-videos/`:
-```text
-public/
-  └── announcement-videos/
-      └── 01_feature_walkthrough_demo/
-          ├── video.mp4          # 1080p Full HD video with synchronized audio
-          ├── thumbnail.png      # High-res video preview thumbnail
-          └── announcement.md    # YouTube, X/Twitter, LinkedIn & Changelog copy
+Full-length cuts: `examples/sample-landscape.mp4` and `examples/sample-vertical.mp4`.
+
+## What you need
+
+Python 3.10+, [Playwright](https://playwright.dev) Chromium, and ffmpeg/ffprobe on PATH. Voice-over uses `edge-tts` (`pip install edge-tts`).
+
+## Render
+
+The agent should inspect the page, write `plan.json`, and render:
+
+```bash
+python scripts/inspect_page.py http://localhost:3000
+python scripts/make_video.py plan.json --validate-only
+python scripts/make_video.py plan.json -o public/announcement-videos/01_export/video.mp4
 ```
 
----
+Draft from git, without recording:
 
-## 📄 License
-MIT © [Harmish Patel](https://github.com/Harmish001)
+```bash
+python scripts/auto_release.py --url http://localhost:3000 --dry-run
+```
+
+Add `--before-after` for a before card from the previous tag, or `--before-url` to film an already-running old build. That path does not checkout your worktree.
+
+## Output
+
+`public/announcement-videos/<seq>_<slug>/` holds `video.mp4`, `thumbnail.png`, `video.srt`, `video.vtt`, `video.gif`, `announcement.md`, `timings.json`, and `plan.json`. The folder is gitignored here. Keep it gitignored in the app repo so the mp4s stay out of the production bundle.
+
+Formats: `landscape` (1920x1080), `vertical` (phone viewport, 1080x1920 output), `square` (1080x1080).
+
+## Feedback
+
+```bash
+python scripts/make_video.py plan.json -o video.mp4 --note "zoom more"
+python scripts/make_video.py plan.json -o video.mp4 --note "shorten the intro"
+```
+
+Plan fields, selectors, and the edit phrases: `references/plan-format.md`. Agent workflow: `SKILL.md`.
+
+## License
+
+MIT. Copyright holder is in `package.json`.

@@ -12,11 +12,11 @@ One file describes the whole video. Run `make_video.py plan.json --validate-only
 | `version` | no | `""` | Shown as a pill, and in "What's new in ..." |
 | `subhead` | no | `""` | Intro card sub-line |
 | `base_url` | no | `""` | Prepended to relative `goto` urls. Required if a feature does not start with `goto` |
-| `format` | no | `landscape` | `landscape` (1920x1080) or `vertical` (1080x1920, mobile emulation) |
-| `accent` | no | auto | Brand color. **Auto-extracted from the live site** when `base_url` is set and accent is the default. Override by setting an explicit hex value. |
+| `format` | no | `landscape` | `landscape` (1920x1080), `vertical` (phone CSS 390x844 at DPR 3, output 1080x1920), `square` (1080x1080) |
+| `accent` | no | `auto` | `auto` extracts the live site color when `base_url` is set. Any hex, including `#6366f1`, is kept. |
 | `click_effect` | no | `ripple` | Click animation: `ripple` (ring), `sparkle` (particle burst), `glow` (radial pulse) |
 | `nav_transition` | no | `fade` | In-browser page transition on `goto`: `fade`, `slide`, `zoom` |
-| `voiceover` | no | `false` | Narrate feature captions using AI TTS. Requires `pip install edge-tts`. |
+| `voiceover` | no | `true` | Narrate with edge-tts. Scenes are sized from the measured audio. |
 | `voiceover_voice` | no | `en-US-AriaNeural` | Any valid [edge-tts voice](https://github.com/rany2/edge-tts#voices). |
 | `custom_effects` | no | `[]` | List of `{"effect": "sparkle"\|"glow"\|"pulse", "selector": "css-selector"}` objects. Applied on every feature page after load. User instructions like "add sparkle on the submit button" map here. |
 | `bullets` | no | feature captions | Outro checklist, max 5 shown |
@@ -26,7 +26,10 @@ One file describes the whole video. Run `make_video.py plan.json --validate-only
 | `storage_state` | no | | Playwright session file for logged-in apps (demo account only) |
 | `color_scheme` | no | | `light` or `dark`, forces the site's preference |
 | `cursor` | no | `arrow` landscape, `tap` vertical | `arrow`, `tap` (ripple only), or `none` |
-| `viewport` | no | 1280x720 / 540x960 | `{"width": .., "height": ..}`. Keep the aspect ratio |
+| `viewport` | no | 1920x1080, or 390x844 when vertical | Phone size for vertical. A saved 1080x1920 viewport is treated as the old default and replaced. |
+| `zoom` | no | `1.28` | Camera scale on click and highlight. `1` disables it. A step may set its own `zoom`. |
+| `capture` | no | `video` | `frames` uses a CDP screencast instead of Playwright webm. |
+| `narration` | feature | caption | Spoken line. The on-screen `caption` can stay short. |
 | `intro_seconds` / `outro_seconds` | no | 3.0 / 3.5 | |
 
 ## Feature object
@@ -40,7 +43,9 @@ One file describes the whole video. Run `make_video.py plan.json --validate-only
 }
 ```
 
-- `caption`: shown as a pill at the bottom for the whole clip. Short and benefit-first.
+- `caption`: short line on screen.
+- `narration`: spoken line. Falls back to `caption`. Scenes grow to fit the audio.
+- A feature may be a card instead of a recording: `{"card": {"title": "Before v1.0.0", "lines": ["file.py +10 -2"]}}`.
 - `speed`: playback multiplier for slow flows, for example `1.5`.
 - `hold_ms`: how long to linger on the final state so viewers can read it.
 - `steps`: ordered actions. If the first is not `goto`, `goto "/"` is inserted when `base_url` is set.
@@ -102,13 +107,13 @@ Anything Playwright accepts: CSS (`#id`, `[data-testid="x"]`), `text=Save`, `but
 
 ## Errors
 
-On failure the renderer prints JSON with the feature index, the step, Playwright's message, and a path to a screenshot of the page at that moment, then exits non-zero. The work folder is kept so you can open the screenshot.
+On failure the renderer prints JSON with the feature index, the step, Playwright's message, and a path to a screenshot of the page at that moment, then exits non-zero. That work folder is kept so you can open the screenshot. `plan.json` is kept after a successful render too. Edit phrases (`--note`) and the `.cache` folder next to the video re-record only the scenes that changed.
 
 ---
 
 ## Voice-over
 
-Set `"voiceover": true` to narrate captions with AI Text-to-Speech via **edge-tts** (free, Microsoft Neural voices).
+Set `"voiceover": true` (the default) to narrate each scene with edge-tts. The spoken text is `narration` when set, otherwise the caption. Audio is generated first and measured with ffprobe. Intro, outro, and `hold_ms` grow so the line finishes before the next scene.
 
 ```bash
 pip install edge-tts

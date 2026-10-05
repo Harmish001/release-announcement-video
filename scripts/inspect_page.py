@@ -11,6 +11,8 @@ import argparse
 import json
 import sys
 
+from common import default_viewport
+
 JS = r"""
 () => {
   const q = 'button, a[href], input, textarea, select, summary, [role=button], [role=tab], [role=switch], [data-testid]';
@@ -45,7 +47,7 @@ def main():
     from playwright.sync_api import sync_playwright
     with sync_playwright() as p:
         b = p.chromium.launch()
-        opts = {"viewport": {"width": 540, "height": 960} if a.mobile else {"width": 1280, "height": 720}}
+        opts = {"viewport": default_viewport("vertical" if a.mobile else "landscape")}
         if a.mobile:
             opts.update(is_mobile=True, has_touch=True)
         if a.storage_state:
