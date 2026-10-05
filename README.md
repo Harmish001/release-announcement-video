@@ -2,16 +2,22 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Turn a git range or a live page into an announcement video, a 1280x720 thumbnail, subtitles, a short GIF, and social copy.
+Turn a git range or a live page into an announcement video, a 1280x720 JPG thumbnail, and social copy.
 
-Version is `package.json` only. This repo does not publish a live npm version badge. From a checkout:
+## Installation
+
+Install the skill into Antigravity, Claude Code, Cursor, Windsurf, or GitHub Copilot:
+
+```bash
+npx skills add Harmish001/release-announcement-video
+```
+
+Or from a local checkout:
 
 ```bash
 node bin/cli.js add
 node bin/cli.js doctor
 ```
-
-`npx release-announcement-video add` works after the package is published. `node bin/cli.js help` is the local check that the CLI runs.
 
 ![Sample](examples/preview.gif)
 
