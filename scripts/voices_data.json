@@ -1,0 +1,1471 @@
+{
+  "sq-AL-AnilaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (sq-AL, AnilaNeural)",
+    "gender": "Female",
+    "locale": "sq-AL",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "sq-AL-IlirNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (sq-AL, IlirNeural)",
+    "gender": "Male",
+    "locale": "sq-AL",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "bn-IN-BashkarNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (bn-IN, BashkarNeural)",
+    "gender": "Male",
+    "locale": "bn-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "bn-IN-TanishaaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (bn-IN, TanishaaNeural)",
+    "gender": "Female",
+    "locale": "bn-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "bs-BA-GoranNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (bs-BA, GoranNeural)",
+    "gender": "Male",
+    "locale": "bs-BA",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "bs-BA-VesnaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (bs-BA, VesnaNeural)",
+    "gender": "Female",
+    "locale": "bs-BA",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "bg-BG-BorislavNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (bg-BG, BorislavNeural)",
+    "gender": "Male",
+    "locale": "bg-BG",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "bg-BG-KalinaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (bg-BG, KalinaNeural)",
+    "gender": "Female",
+    "locale": "bg-BG",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "ca-ES-EnricNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (ca-ES, EnricNeural)",
+    "gender": "Male",
+    "locale": "ca-ES",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "ca-ES-JoanaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (ca-ES, JoanaNeural)",
+    "gender": "Female",
+    "locale": "ca-ES",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "hr-HR-GabrijelaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (hr-HR, GabrijelaNeural)",
+    "gender": "Female",
+    "locale": "hr-HR",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "hr-HR-SreckoNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (hr-HR, SreckoNeural)",
+    "gender": "Male",
+    "locale": "hr-HR",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "cs-CZ-AntoninNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (cs-CZ, AntoninNeural)",
+    "gender": "Male",
+    "locale": "cs-CZ",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "cs-CZ-VlastaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (cs-CZ, VlastaNeural)",
+    "gender": "Female",
+    "locale": "cs-CZ",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "da-DK-ChristelNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (da-DK, ChristelNeural)",
+    "gender": "Female",
+    "locale": "da-DK",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "da-DK-JeppeNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (da-DK, JeppeNeural)",
+    "gender": "Male",
+    "locale": "da-DK",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "nl-BE-ArnaudNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (nl-BE, ArnaudNeural)",
+    "gender": "Male",
+    "locale": "nl-BE",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "nl-BE-DenaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (nl-BE, DenaNeural)",
+    "gender": "Female",
+    "locale": "nl-BE",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "nl-NL-ColetteNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (nl-NL, ColetteNeural)",
+    "gender": "Female",
+    "locale": "nl-NL",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "nl-NL-FennaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (nl-NL, FennaNeural)",
+    "gender": "Female",
+    "locale": "nl-NL",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "nl-NL-MaartenNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (nl-NL, MaartenNeural)",
+    "gender": "Male",
+    "locale": "nl-NL",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "en-IN-NeerjaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-IN, NeerjaNeural)",
+    "gender": "Female",
+    "locale": "en-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "en-IN-PrabhatNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-IN, PrabhatNeural)",
+    "gender": "Male",
+    "locale": "en-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "en-IE-ConnorNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-IE, ConnorNeural)",
+    "gender": "Male",
+    "locale": "en-IE",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "en-IE-EmilyNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-IE, EmilyNeural)",
+    "gender": "Female",
+    "locale": "en-IE",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "en-GB-LibbyNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-GB, LibbyNeural)",
+    "gender": "Female",
+    "locale": "en-GB",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "en-GB-MaisieNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-GB, MaisieNeural)",
+    "gender": "Female",
+    "locale": "en-GB",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "en-GB-RyanNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-GB, RyanNeural)",
+    "gender": "Male",
+    "locale": "en-GB",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "en-GB-SoniaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-GB, SoniaNeural)",
+    "gender": "Female",
+    "locale": "en-GB",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "en-GB-ThomasNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-GB, ThomasNeural)",
+    "gender": "Male",
+    "locale": "en-GB",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "en-US-AriaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-US, AriaNeural)",
+    "gender": "Female",
+    "locale": "en-US",
+    "categories": [
+      "News",
+      "Novel"
+    ],
+    "personalities": [
+      "Positive",
+      "Confident"
+    ]
+  },
+  "en-US-AnaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-US, AnaNeural)",
+    "gender": "Female",
+    "locale": "en-US",
+    "categories": [
+      "Cartoon",
+      "Conversation"
+    ],
+    "personalities": [
+      "Cute"
+    ]
+  },
+  "en-US-ChristopherNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-US, ChristopherNeural)",
+    "gender": "Male",
+    "locale": "en-US",
+    "categories": [
+      "News",
+      "Novel"
+    ],
+    "personalities": [
+      "Reliable",
+      "Authority"
+    ]
+  },
+  "en-US-EricNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-US, EricNeural)",
+    "gender": "Male",
+    "locale": "en-US",
+    "categories": [
+      "News",
+      "Novel"
+    ],
+    "personalities": [
+      "Rational"
+    ]
+  },
+  "en-US-GuyNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-US, GuyNeural)",
+    "gender": "Male",
+    "locale": "en-US",
+    "categories": [
+      "News",
+      "Novel"
+    ],
+    "personalities": [
+      "Passion"
+    ]
+  },
+  "en-US-JennyNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-US, JennyNeural)",
+    "gender": "Female",
+    "locale": "en-US",
+    "categories": [
+      "Conversation",
+      "News"
+    ],
+    "personalities": [
+      "Friendly",
+      "Considerate",
+      "Comfort"
+    ]
+  },
+  "en-US-MichelleNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-US, MichelleNeural)",
+    "gender": "Female",
+    "locale": "en-US",
+    "categories": [
+      "News",
+      "Novel"
+    ],
+    "personalities": [
+      "Friendly",
+      "Pleasant"
+    ]
+  },
+  "en-US-RogerNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-US, RogerNeural)",
+    "gender": "Male",
+    "locale": "en-US",
+    "categories": [
+      "News",
+      "Novel"
+    ],
+    "personalities": [
+      "Lively"
+    ]
+  },
+  "en-US-SteffanNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (en-US, SteffanNeural)",
+    "gender": "Male",
+    "locale": "en-US",
+    "categories": [
+      "News",
+      "Novel"
+    ],
+    "personalities": [
+      "Rational"
+    ]
+  },
+  "et-EE-AnuNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (et-EE, AnuNeural)",
+    "gender": "Female",
+    "locale": "et-EE",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "et-EE-KertNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (et-EE, KertNeural)",
+    "gender": "Male",
+    "locale": "et-EE",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "fi-FI-HarriNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (fi-FI, HarriNeural)",
+    "gender": "Male",
+    "locale": "fi-FI",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "fi-FI-NooraNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (fi-FI, NooraNeural)",
+    "gender": "Female",
+    "locale": "fi-FI",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "fr-BE-CharlineNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (fr-BE, CharlineNeural)",
+    "gender": "Female",
+    "locale": "fr-BE",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "fr-BE-GerardNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (fr-BE, GerardNeural)",
+    "gender": "Male",
+    "locale": "fr-BE",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "fr-FR-DeniseNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (fr-FR, DeniseNeural)",
+    "gender": "Female",
+    "locale": "fr-FR",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "fr-FR-EloiseNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (fr-FR, EloiseNeural)",
+    "gender": "Female",
+    "locale": "fr-FR",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "fr-FR-HenriNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (fr-FR, HenriNeural)",
+    "gender": "Male",
+    "locale": "fr-FR",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "fr-CH-ArianeNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (fr-CH, ArianeNeural)",
+    "gender": "Female",
+    "locale": "fr-CH",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "fr-CH-FabriceNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (fr-CH, FabriceNeural)",
+    "gender": "Male",
+    "locale": "fr-CH",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "gl-ES-RoiNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (gl-ES, RoiNeural)",
+    "gender": "Male",
+    "locale": "gl-ES",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "gl-ES-SabelaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (gl-ES, SabelaNeural)",
+    "gender": "Female",
+    "locale": "gl-ES",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "de-AT-IngridNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (de-AT, IngridNeural)",
+    "gender": "Female",
+    "locale": "de-AT",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "de-AT-JonasNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (de-AT, JonasNeural)",
+    "gender": "Male",
+    "locale": "de-AT",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "de-DE-AmalaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (de-DE, AmalaNeural)",
+    "gender": "Female",
+    "locale": "de-DE",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "de-DE-ConradNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (de-DE, ConradNeural)",
+    "gender": "Male",
+    "locale": "de-DE",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "de-DE-KatjaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (de-DE, KatjaNeural)",
+    "gender": "Female",
+    "locale": "de-DE",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "de-DE-KillianNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (de-DE, KillianNeural)",
+    "gender": "Male",
+    "locale": "de-DE",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "de-CH-JanNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (de-CH, JanNeural)",
+    "gender": "Male",
+    "locale": "de-CH",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "de-CH-LeniNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (de-CH, LeniNeural)",
+    "gender": "Female",
+    "locale": "de-CH",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "el-GR-AthinaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (el-GR, AthinaNeural)",
+    "gender": "Female",
+    "locale": "el-GR",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "el-GR-NestorasNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (el-GR, NestorasNeural)",
+    "gender": "Male",
+    "locale": "el-GR",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "gu-IN-DhwaniNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (gu-IN, DhwaniNeural)",
+    "gender": "Female",
+    "locale": "gu-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "gu-IN-NiranjanNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (gu-IN, NiranjanNeural)",
+    "gender": "Male",
+    "locale": "gu-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "hi-IN-MadhurNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (hi-IN, MadhurNeural)",
+    "gender": "Male",
+    "locale": "hi-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "hi-IN-SwaraNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (hi-IN, SwaraNeural)",
+    "gender": "Female",
+    "locale": "hi-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "hu-HU-NoemiNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (hu-HU, NoemiNeural)",
+    "gender": "Female",
+    "locale": "hu-HU",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "hu-HU-TamasNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (hu-HU, TamasNeural)",
+    "gender": "Male",
+    "locale": "hu-HU",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "is-IS-GudrunNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (is-IS, GudrunNeural)",
+    "gender": "Female",
+    "locale": "is-IS",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "is-IS-GunnarNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (is-IS, GunnarNeural)",
+    "gender": "Male",
+    "locale": "is-IS",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "ga-IE-ColmNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (ga-IE, ColmNeural)",
+    "gender": "Male",
+    "locale": "ga-IE",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "ga-IE-OrlaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (ga-IE, OrlaNeural)",
+    "gender": "Female",
+    "locale": "ga-IE",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "it-IT-DiegoNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (it-IT, DiegoNeural)",
+    "gender": "Male",
+    "locale": "it-IT",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "it-IT-ElsaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (it-IT, ElsaNeural)",
+    "gender": "Female",
+    "locale": "it-IT",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "it-IT-IsabellaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (it-IT, IsabellaNeural)",
+    "gender": "Female",
+    "locale": "it-IT",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "kn-IN-GaganNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (kn-IN, GaganNeural)",
+    "gender": "Male",
+    "locale": "kn-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "kn-IN-SapnaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (kn-IN, SapnaNeural)",
+    "gender": "Female",
+    "locale": "kn-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "lv-LV-EveritaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (lv-LV, EveritaNeural)",
+    "gender": "Female",
+    "locale": "lv-LV",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "lv-LV-NilsNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (lv-LV, NilsNeural)",
+    "gender": "Male",
+    "locale": "lv-LV",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "lt-LT-LeonasNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (lt-LT, LeonasNeural)",
+    "gender": "Male",
+    "locale": "lt-LT",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "lt-LT-OnaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (lt-LT, OnaNeural)",
+    "gender": "Female",
+    "locale": "lt-LT",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "mk-MK-AleksandarNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (mk-MK, AleksandarNeural)",
+    "gender": "Male",
+    "locale": "mk-MK",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "mk-MK-MarijaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (mk-MK, MarijaNeural)",
+    "gender": "Female",
+    "locale": "mk-MK",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "ml-IN-MidhunNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (ml-IN, MidhunNeural)",
+    "gender": "Male",
+    "locale": "ml-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "ml-IN-SobhanaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (ml-IN, SobhanaNeural)",
+    "gender": "Female",
+    "locale": "ml-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "mt-MT-GraceNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (mt-MT, GraceNeural)",
+    "gender": "Female",
+    "locale": "mt-MT",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "mt-MT-JosephNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (mt-MT, JosephNeural)",
+    "gender": "Male",
+    "locale": "mt-MT",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "mr-IN-AarohiNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (mr-IN, AarohiNeural)",
+    "gender": "Female",
+    "locale": "mr-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "mr-IN-ManoharNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (mr-IN, ManoharNeural)",
+    "gender": "Male",
+    "locale": "mr-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "nb-NO-FinnNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (nb-NO, FinnNeural)",
+    "gender": "Male",
+    "locale": "nb-NO",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "nb-NO-PernilleNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (nb-NO, PernilleNeural)",
+    "gender": "Female",
+    "locale": "nb-NO",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "pl-PL-MarekNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (pl-PL, MarekNeural)",
+    "gender": "Male",
+    "locale": "pl-PL",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "pl-PL-ZofiaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (pl-PL, ZofiaNeural)",
+    "gender": "Female",
+    "locale": "pl-PL",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "pt-PT-DuarteNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (pt-PT, DuarteNeural)",
+    "gender": "Male",
+    "locale": "pt-PT",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "pt-PT-RaquelNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (pt-PT, RaquelNeural)",
+    "gender": "Female",
+    "locale": "pt-PT",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "ro-RO-AlinaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (ro-RO, AlinaNeural)",
+    "gender": "Female",
+    "locale": "ro-RO",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "ro-RO-EmilNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (ro-RO, EmilNeural)",
+    "gender": "Male",
+    "locale": "ro-RO",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "ru-RU-DmitryNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (ru-RU, DmitryNeural)",
+    "gender": "Male",
+    "locale": "ru-RU",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "ru-RU-SvetlanaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (ru-RU, SvetlanaNeural)",
+    "gender": "Female",
+    "locale": "ru-RU",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "sr-RS-NicholasNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (sr-RS, NicholasNeural)",
+    "gender": "Male",
+    "locale": "sr-RS",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "sr-RS-SophieNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (sr-RS, SophieNeural)",
+    "gender": "Female",
+    "locale": "sr-RS",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "sk-SK-LukasNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (sk-SK, LukasNeural)",
+    "gender": "Male",
+    "locale": "sk-SK",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "sk-SK-ViktoriaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (sk-SK, ViktoriaNeural)",
+    "gender": "Female",
+    "locale": "sk-SK",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "sl-SI-PetraNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (sl-SI, PetraNeural)",
+    "gender": "Female",
+    "locale": "sl-SI",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "sl-SI-RokNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (sl-SI, RokNeural)",
+    "gender": "Male",
+    "locale": "sl-SI",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "es-ES-AlvaroNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (es-ES, AlvaroNeural)",
+    "gender": "Male",
+    "locale": "es-ES",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "es-ES-ElviraNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (es-ES, ElviraNeural)",
+    "gender": "Female",
+    "locale": "es-ES",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "es-ES-ManuelEsCUNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (es-ES, ManuelEsCUNeural)",
+    "gender": "Male",
+    "locale": "es-ES",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "es-US-AlonsoNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (es-US, AlonsoNeural)",
+    "gender": "Male",
+    "locale": "es-US",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "es-US-PalomaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (es-US, PalomaNeural)",
+    "gender": "Female",
+    "locale": "es-US",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "sv-SE-MattiasNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (sv-SE, MattiasNeural)",
+    "gender": "Male",
+    "locale": "sv-SE",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "sv-SE-SofieNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (sv-SE, SofieNeural)",
+    "gender": "Female",
+    "locale": "sv-SE",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "ta-IN-PallaviNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (ta-IN, PallaviNeural)",
+    "gender": "Female",
+    "locale": "ta-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "ta-IN-ValluvarNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (ta-IN, ValluvarNeural)",
+    "gender": "Male",
+    "locale": "ta-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "te-IN-MohanNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (te-IN, MohanNeural)",
+    "gender": "Male",
+    "locale": "te-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "te-IN-ShrutiNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (te-IN, ShrutiNeural)",
+    "gender": "Female",
+    "locale": "te-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "uk-UA-OstapNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (uk-UA, OstapNeural)",
+    "gender": "Male",
+    "locale": "uk-UA",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "uk-UA-PolinaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (uk-UA, PolinaNeural)",
+    "gender": "Female",
+    "locale": "uk-UA",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "ur-IN-GulNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (ur-IN, GulNeural)",
+    "gender": "Female",
+    "locale": "ur-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "ur-IN-SalmanNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (ur-IN, SalmanNeural)",
+    "gender": "Male",
+    "locale": "ur-IN",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "cy-GB-AledNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (cy-GB, AledNeural)",
+    "gender": "Male",
+    "locale": "cy-GB",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  },
+  "cy-GB-NiaNeural": {
+    "name": "Microsoft Server Speech Text to Speech Voice (cy-GB, NiaNeural)",
+    "gender": "Female",
+    "locale": "cy-GB",
+    "categories": [
+      "General"
+    ],
+    "personalities": [
+      "Friendly",
+      "Positive"
+    ]
+  }
+}

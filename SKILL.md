@@ -25,7 +25,7 @@ Output stays in `public/announcement-videos/`. Keep that path gitignored so the 
 - Selectors come from `inspect_page.py` or the DOM. Do not guess.
 - Vertical video uses a phone viewport (390x844, device scale 3) and scales up to 1080x1920. Do not set a 1080x1920 CSS viewport.
 - `accent: "auto"` reads the live site. A hex in the plan, including `#6366f1`, is kept.
-- Voice-over is edge-tts. Each scene is lengthened to fit the measured clip. `narration` is what is spoken. `caption` is what is on screen.
+- Voice-over is edge-tts. `voiceover_voice` dynamically adapts to the product topic/domain (e.g. `en-US-AriaNeural` for product announcements, `en-US-ChristopherNeural` for developer tools/infrastructure, `en-US-JennyNeural` for UI/onboarding, `en-US-GuyNeural` for high-energy/AI launches). Set `"voiceover_voice": "auto"` or select any valid voice from the 300+ Edge-TTS catalog (`tts-voice.md` / `scripts/voices.py`). Each scene is lengthened to fit the measured clip. `narration` is what is spoken. `caption` is what is on screen.
 - Click and highlight zoom toward the target (`zoom` in the plan or on a step). Set `zoom` to `1` to turn that off.
 - `nav_transition` is `fade`, `slide`, or `zoom`.
 - `--before-after` adds a before card from the previous tag. It does not checkout the worktree. To film the old UI, serve that tag and pass `--before-url`.

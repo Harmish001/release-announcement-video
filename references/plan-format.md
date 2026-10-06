@@ -121,11 +121,24 @@ pip install edge-tts
 
 The renderer speaks the intro headline and each feature caption in sequence. The merged audio track is added to the final MP4.
 
-You can pick any voice from the [edge-tts voice list](https://github.com/rany2/edge-tts#voices):
+### Dynamic Voice Selection
+You can set `"voiceover_voice": "auto"` (or specify any of the 300+ supported Edge-TTS voices from `tts-voice.md` / `scripts/voices.py`). The engine dynamically picks the optimal voice matching the product and topic:
+
+| Product / Feature Topic | Recommended Voice | Tone / Personality |
+| :--- | :--- | :--- |
+| **Product Announcements & SaaS Releases** | `en-US-AriaNeural` | Positive, Confident, News |
+| **Developer Tools, Cloud, Databases & DevOps** | `en-US-ChristopherNeural` | Reliable, Authority |
+| **Interactive UI Walkthroughs & Onboarding** | `en-US-JennyNeural` | Friendly, Considerate |
+| **AI Breakthroughs & High-Energy Features** | `en-US-GuyNeural` | Passion, Intense |
+| **Data Analytics, Benchmarks & Algorithms** | `en-US-EricNeural` | Rational, Analytical |
+| **Fast-Paced Tips & Productivity Extensions** | `en-US-RogerNeural` | Lively, Energetic |
+| **British / International English** | `en-GB-RyanNeural` / `en-GB-SoniaNeural` | Professional, Friendly |
+| **Multilingual Locales** | Native locale (e.g. `fr-FR-DeniseNeural`, `de-DE-KillianNeural`, `es-ES-AlvaroNeural`, `hi-IN-MadhurNeural`) | Locale-matching |
+
 ```json
 {
   "voiceover": true,
-  "voiceover_voice": "en-GB-SoniaNeural"
+  "voiceover_voice": "auto"
 }
 ```
 

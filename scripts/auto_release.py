@@ -212,6 +212,15 @@ def auto_build_plan(url, repo_path, from_ref, to_ref, fmt="landscape", manual_fe
             "steps": steps,
         })
 
+    # Dynamic voice selection if not explicitly set
+    chosen_voice = voiceover_voice
+    if not chosen_voice or chosen_voice.lower() in ("auto", "dynamic"):
+        try:
+            from voices import recommend_voice
+            chosen_voice = recommend_voice(topic=f"{product} {headline}")
+        except Exception:
+            chosen_voice = "en-US-AriaNeural"
+
     plan = {
         "product": product,
         "version": version,
@@ -228,7 +237,7 @@ def auto_build_plan(url, repo_path, from_ref, to_ref, fmt="landscape", manual_fe
         "click_effect": click_effect or "ripple",
         "nav_transition": nav_transition or "fade",
         "voiceover": voiceover,
-        "voiceover_voice": voiceover_voice or "en-US-AriaNeural",
+        "voiceover_voice": chosen_voice,
         "custom_effects": custom_effects or [],
     }
 

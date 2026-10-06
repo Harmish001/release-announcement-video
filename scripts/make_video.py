@@ -61,6 +61,11 @@ from common import (
     youtube_chapter_lines,
 )
 
+try:
+    from voices import validate_and_normalize_voice, recommend_voice, is_supported_voice
+except ImportError:
+    from scripts.voices import validate_and_normalize_voice, recommend_voice, is_supported_voice
+
 # Ensure UTF-8 output on Windows consoles
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
@@ -839,7 +844,13 @@ def generate_voiceover(plan, work_dir, cache_dir=None):
         print("[voiceover] edge-tts not installed. Run: pip install edge-tts", file=sys.stderr)
         return None
 
-    voice = plan.get("voiceover_voice", "en-US-AriaNeural")
+    raw_voice = plan.get("voiceover_voice", "en-US-AriaNeural")
+    topic_hint = f"{plan.get('product', '')} {plan.get('headline', '')} {plan.get('subhead', '')}"
+    if not raw_voice or raw_voice.lower() in ("auto", "dynamic"):
+        voice = recommend_voice(topic=topic_hint)
+    else:
+        voice = validate_and_normalize_voice(raw_voice, default="en-US-AriaNeural", topic=topic_hint)
+
     tts_dir = work_dir / "tts"
     tts_dir.mkdir(exist_ok=True)
     items = narration_lines(plan)
