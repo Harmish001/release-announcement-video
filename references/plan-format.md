@@ -29,6 +29,8 @@ One file describes the whole video. Run `make_video.py plan.json --validate-only
 | `viewport` | no | 1920x1080, or 390x844 when vertical | Phone size for vertical. A saved 1080x1920 viewport is treated as the old default and replaced. |
 | `zoom` | no | `1.28` | Camera scale on click and highlight. `1` disables it. A step may set its own `zoom`. |
 | `capture` | no | `video` | `frames` uses a CDP screencast instead of Playwright webm. |
+| `device_frame` | no | | Wrap every feature clip in one template: `macos`, `browser`, `glass`, `iphone`, `laptop`, `ipad`. Intro/outro cards stay full-screen. |
+| `frame_background` | no | `gradient-sky` | Area around the device. Preset: `gradient-sky`, `gradient-studio`, `gradient-radial`, `gradient-mesh`, `gradient-aurora`, `gradient-sunset`, `gradient-ocean`. Or a hex color, or an image path relative to the plan file. |
 | `narration` | feature | caption | Spoken line. The on-screen `caption` can stay short. |
 | `intro_seconds` / `outro_seconds` | no | 3.0 / 3.5 | |
 
@@ -184,3 +186,74 @@ When `base_url` is set and `accent` is not explicitly overridden, the renderer v
 3. Background color of `button[class*=primary]`
 
 The extracted color is used for the intro/outro card gradients, spotlight borders, cursor ripples, and click effects — making every video match the real site brand automatically.
+
+---
+
+## Device Frame Templates
+
+Wrap your feature recordings inside realistic device frames with styled backgrounds. Intro and outro cards stay full-screen — only feature clips get the frame treatment.
+
+### Supported Frames
+
+| Frame | Look |
+|---|---|
+| `macos` | Light macOS window: traffic lights, centered title (the product name), soft shadow |
+| `browser` | Light browser chrome: traffic lights and a centered address pill (the site host) |
+| `glass` | Translucent rounded rim and shadow. The clip fills the opening |
+| `iphone` | Portrait handset, dark bezel, dynamic island, side buttons. Best with `format: vertical` |
+| `laptop` | Lid, webcam, hinge, and base. The clip keeps its aspect inside the screen |
+| `ipad` | Dark bezel, front camera, rounded corners. The clip keeps its aspect |
+
+### Background Options
+
+When `device_frame` is set, the `frame_background` field controls what is visible behind and around the device:
+
+| Value | Effect |
+|---|---|
+| `gradient-sky` (default) | Light blue mockup backdrop |
+| `gradient-studio` | Light gray studio backdrop |
+| `gradient-radial` | Radial glow derived from `accent` |
+| `gradient-mesh` | Multi-stop mesh from `accent` |
+| `gradient-aurora` | Aurora bands from `accent` |
+| `gradient-sunset` | Warm tones shifted from `accent` |
+| `gradient-ocean` | Cool tones shifted from `accent` |
+| `#hexcolor` | Solid color |
+| `path/to/image.jpg` | Image, relative to plan.json or absolute. Missing file fails validation |
+
+### Examples
+
+Browser frame with auto-detected theme gradient:
+```json
+{
+  "product": "PixelDesk",
+  "headline": "Dark mode and instant search",
+  "base_url": "http://localhost:3000",
+  "device_frame": "browser",
+  "features": [...]
+}
+```
+
+MacBook frame with a custom background image:
+```json
+{
+  "device_frame": "laptop",
+  "frame_background": "assets/promo-bg.jpg",
+  "accent": "#6366f1"
+}
+```
+
+iPad frame with sunset gradient:
+```json
+{
+  "device_frame": "ipad",
+  "frame_background": "gradient-sunset"
+}
+```
+
+Via CLI:
+```bash
+python scripts/auto_release.py --url http://localhost:3000 \
+  --device-frame browser \
+  --frame-background gradient-ocean
+```
+

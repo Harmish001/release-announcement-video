@@ -126,7 +126,7 @@ def inspect_elements(url, mobile=False, storage_state=None):
 def auto_build_plan(url, repo_path, from_ref, to_ref, fmt="landscape", manual_features=None,
                     product_override=None, headline_override=None, storage_state=None, music=None,
                     accent=None, click_effect=None, nav_transition=None, voiceover=False,
-                    voiceover_voice=None, custom_effects=None):
+                    voiceover_voice=None, custom_effects=None, device_frame=None, frame_background=None):
     """Automatically build plan.json from git diff and live inspection."""
     product = product_override or get_product_name(repo_path)
     
@@ -245,6 +245,10 @@ def auto_build_plan(url, repo_path, from_ref, to_ref, fmt="landscape", manual_fe
         plan["storage_state"] = storage_state
     if music:
         plan["music"] = music
+    if device_frame:
+        plan["device_frame"] = device_frame
+    if frame_background:
+        plan["frame_background"] = frame_background
 
     return plan, lead_slug, short_hash
 
@@ -363,6 +367,12 @@ def main():
     ap.add_argument("--music", help="Audio file path for background music")
     ap.add_argument("--output", "-o", help="Custom output MP4 path")
     ap.add_argument("--plan-only", action="store_true", help="Generate plan.json only without rendering video")
+    ap.add_argument("--device-frame", choices=["macos", "browser", "glass", "iphone", "laptop", "ipad"],
+                    default=None, help="Wrap feature clips in a device frame template")
+    ap.add_argument("--frame-background", default=None,
+                    help="Background for device frame: gradient-sky (default), gradient-studio, "
+                         "gradient-radial, gradient-mesh, gradient-aurora, gradient-sunset, "
+                         "gradient-ocean, a hex color, or an image path")
     a = ap.parse_args()
 
     url = a.url or detect_local_dev_url()
@@ -398,6 +408,8 @@ def main():
         voiceover=voiceover_enabled,
         voiceover_voice=a.voiceover_voice,
         custom_effects=custom_effects,
+        device_frame=a.device_frame,
+        frame_background=a.frame_background,
     )
 
     out_dir = Path(a.repo) / "public" / "announcement-videos"

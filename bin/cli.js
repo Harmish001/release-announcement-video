@@ -294,6 +294,8 @@ ${colors.bright}OPTIONS for 'generate':${colors.reset}
   ${colors.yellow}--dry-run${colors.reset}            Check selectors and the denylist, do not record
   ${colors.yellow}--before-after${colors.reset}      Before card from the previous tag (no checkout)
   ${colors.yellow}--before-url <url>${colors.reset}  Film an already-running old build
+  ${colors.yellow}--device-frame <f>${colors.reset}  Wrap features in a device template: ${colors.dim}macos, browser, glass, iphone, laptop, ipad${colors.reset}
+  ${colors.yellow}--frame-background${colors.reset}  Background preset, hex, or image path (default: gradient-sky)
   ${colors.yellow}--output <path>${colors.reset}      Output MP4 file path
 
 ${colors.bright}EXAMPLES:${colors.reset}

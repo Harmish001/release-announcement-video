@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import common
+import device_frames
 import make_video
 
 
@@ -77,6 +78,69 @@ class CommonTest(unittest.TestCase):
         self.assertEqual(plan["viewport"], common.PHONE)
         self.assertEqual(plan["device_scale_factor"], common.PHONE_DPR)
         self.assertEqual(plan["accent"], "#6366f1")
+
+    def _plan(self, directory, **extra):
+        raw = {
+            "product": "Fixture",
+            "headline": "Export",
+            "accent": "#6366f1",
+            "features": [{"caption": "Export", "steps": [{"action": "goto", "url": "http://example.com"}]}],
+        }
+        raw.update(extra)
+        path = Path(directory) / "plan.json"
+        path.write_text(json.dumps(raw), encoding="utf-8")
+        return path
+
+    def test_device_frame_validation(self):
+        device_frames._self_check()
+        with tempfile.TemporaryDirectory() as d:
+            plan = make_video.load_plan(self._plan(d, device_frame="iPad", frame_background="#112233"))
+        self.assertEqual(plan["device_frame"], "ipad")
+        self.assertEqual(plan["_frame_bg_kind"], "color")
+        self.assertEqual(plan["_frame_bg_payload"], "#112233")
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaises(SystemExit):
+                make_video.load_plan(self._plan(d, device_frame="toaster"))
+        with tempfile.TemporaryDirectory() as d:
+            with self.assertRaises(SystemExit):
+                make_video.load_plan(self._plan(d, device_frame="ipad", frame_background="missing-bg.png"))
+
+    def test_device_frame_composite(self):
+        if not shutil.which("ffmpeg"):
+            self.skipTest("ffmpeg")
+        lay = device_frames.layout("browser", 320, 180)
+        s = lay["screen"]
+        with tempfile.TemporaryDirectory() as d:
+            d = Path(d)
+            bg, chrome, mask = d / "bg.png", d / "chrome.png", d / "mask.png"
+            clip = d / "clip.mp4"
+            subprocess.run(
+                ["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=blue:s=320x180:d=1", "-frames:v", "1", str(bg)],
+                check=True, capture_output=True,
+            )
+            subprocess.run(
+                ["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=black@0.0:s=320x180:d=1,format=rgba",
+                 "-frames:v", "1", str(chrome)],
+                check=True, capture_output=True,
+            )
+            subprocess.run(
+                ["ffmpeg", "-y", "-f", "lavfi", "-i", f"color=c=white:s={s['w']}x{s['h']}:d=1",
+                 "-frames:v", "1", str(mask)],
+                check=True, capture_output=True,
+            )
+            subprocess.run(
+                ["ffmpeg", "-y", "-f", "lavfi", "-i", "color=c=red:s=320x180:d=0.4",
+                 "-c:v", "libx264", "-pix_fmt", "yuv420p", str(clip)],
+                check=True, capture_output=True,
+            )
+            make_video.apply_device_frame(clip, {"bg": bg, "chrome": chrome, "mask": mask, "screen": s})
+            probe = subprocess.run(
+                ["ffprobe", "-v", "error", "-select_streams", "v:0",
+                 "-show_entries", "stream=width,height", "-of", "csv=p=0", str(clip)],
+                check=True, capture_output=True, text=True,
+            )
+            self.assertEqual(probe.stdout.strip(), "320,180")
+            self.assertGreater(clip.stat().st_size, 1000)
 
     def test_validate_fixture(self):
         script = ROOT / "scripts" / "make_video.py"

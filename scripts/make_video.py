@@ -24,6 +24,8 @@ New plan.json fields (all optional):
   voiceover_voice   edge-tts voice name, default "en-US-AriaNeural"
   custom_effects    list of {effect, selector} objects applied on every page
                     effect: "sparkle" | "glow" | "pulse"
+  device_frame      macos | browser | glass | iphone | laptop | ipad
+  frame_background  preset, hex, or image path behind the device
 """
 import argparse
 import asyncio
@@ -37,6 +39,17 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+
+try:
+    from device_frames import (
+        validate_device_frame, validate_frame_background, DEVICE_FRAMES,
+        BACKGROUND_PRESETS, frame_label, render_frame_assets,
+    )
+except ImportError:
+    from scripts.device_frames import (
+        validate_device_frame, validate_frame_background, DEVICE_FRAMES,
+        BACKGROUND_PRESETS, frame_label, render_frame_assets,
+    )
 
 from common import (
     DEMO_WARNING,
@@ -113,6 +126,24 @@ def load_plan(path):
     plan.setdefault("custom_effects", [])
     plan.setdefault("zoom", 1.28)
     plan.setdefault("capture", "video")             # video | frames (CDP screencast)
+    raw_frame = plan.get("device_frame")
+    frame = validate_device_frame(raw_frame)
+    if raw_frame not in (None, "") and frame is None and str(raw_frame).strip().lower() not in ("", "none", "false", "off"):
+        die(f"device_frame must be one of: {', '.join(DEVICE_FRAMES)} (got '{raw_frame}')")
+    plan["device_frame"] = frame
+    bg_kind, bg_payload = validate_frame_background(plan.get("frame_background"))
+    if frame and bg_kind == "image":
+        img = Path(bg_payload)
+        if not img.is_absolute():
+            img = Path(path).resolve().parent / img
+        if not img.is_file():
+            die(
+                f"frame_background image not found: {bg_payload}. "
+                f"Use a preset ({', '.join(BACKGROUND_PRESETS)}), a hex color, or an image path."
+            )
+        bg_payload = str(img.resolve())
+    plan["_frame_bg_kind"] = bg_kind
+    plan["_frame_bg_payload"] = bg_payload
     if plan["format"] not in ("landscape", "vertical", "square"):
         die("format must be 'landscape', 'vertical' or 'square'")
     fmt = plan["format"]
@@ -965,6 +996,45 @@ def frames_to_clip(frame_dir, speed, W, H, out, cover=False):
          "-c:v", "libx264", "-crf", "14", "-preset", "slow", "-an", str(out)])
 
 
+# --------------------------------------------------------------------------- device frame compositing
+
+def apply_device_frame(clip_path, assets):
+    """Scale a clip into the screen hole, under the chrome, on the background.
+
+    assets come from render_frame_assets (one background, one chrome, one mask).
+    The clip is replaced in place.
+    """
+    if not assets:
+        return
+    s = assets["screen"]
+    sw, sh, sx, sy = s["w"], s["h"], s["x"], s["y"]
+    # Looped stills have no end. Cap the output at the clip length.
+    secs = duration(clip_path)
+    framed = clip_path.with_suffix(".framed.mp4")
+    run([
+        "ffmpeg", "-y",
+        "-framerate", str(FPS), "-loop", "1", "-i", str(assets["bg"]),
+        "-i", str(clip_path),
+        "-framerate", str(FPS), "-loop", "1", "-i", str(assets["chrome"]),
+        "-framerate", str(FPS), "-loop", "1", "-i", str(assets["mask"]),
+        "-filter_complex",
+        (
+            f"[1:v]scale={sw}:{sh}:force_original_aspect_ratio=increase:flags=lanczos,"
+            f"crop={sw}:{sh},setsar=1,format=gbrp[color];"
+            f"[3:v]scale={sw}:{sh},format=rgba,alphaextract,format=gray[msk];"
+            f"[color][msk]alphamerge,format=rgba[rounded];"
+            f"[0:v][rounded]overlay={sx}:{sy}:shortest=1[base];"
+            f"[base][2:v]overlay=0:0:shortest=1,format=yuv420p[out]"
+        ),
+        "-map", "[out]",
+        "-c:v", "libx264", "-crf", "14", "-preset", "slow", "-an",
+        "-r", str(FPS), "-t", f"{secs:.3f}",
+        str(framed),
+    ])
+    framed.replace(clip_path)
+    print(f"[device_frame] wrapped {clip_path.name}", file=sys.stderr)
+
+
 def ensure_min_duration(clip, need, W, H):
     if not need:
         return
@@ -1111,6 +1181,9 @@ def feature_payload(plan, feat):
         "format": plan["format"],
         "capture": plan["capture"],
         "effects": plan.get("custom_effects"),
+        "device_frame": plan.get("device_frame"),
+        "frame_bg": plan.get("_frame_bg_kind"),
+        "frame_bg_val": plan.get("_frame_bg_payload"),
     }
 
 
@@ -1148,8 +1221,12 @@ def main():
             die(f"unrecognized edit note: {note}. Try: zoom more, zoom less, shorten the intro, shorten the outro, shorten")
         notes_applied = True
     if a.validate_only:
-        print(json.dumps({"ok": True, "features": len(plan["features"]), "format": plan["format"],
-                          "viewport": plan["viewport"], "accent": plan["accent"]}))
+        print(json.dumps({
+            "ok": True, "features": len(plan["features"]), "format": plan["format"],
+            "viewport": plan["viewport"], "accent": plan["accent"],
+            "device_frame": plan.get("device_frame"),
+            "frame_background": plan.get("frame_background") or plan.get("_frame_bg_payload"),
+        }))
         return
     for tool in ("ffmpeg", "ffprobe"):
         if not shutil.which(tool):
@@ -1179,7 +1256,8 @@ def main():
         audio_by_key = {item["key"]: item["audio_s"] for item in tts_clips if item.get("audio_s")}
         apply_narration_timing(plan, audio_by_key)
     if notes_applied:
-        plan_path.write_text(json.dumps(plan, indent=2) + "\n", encoding="utf-8")
+        clean = {k: v for k, v in plan.items() if not str(k).startswith("_")}
+        plan_path.write_text(json.dumps(clean, indent=2) + "\n", encoding="utf-8")
 
     logo_uri = None
     if plan.get("logo"):
@@ -1200,6 +1278,13 @@ def main():
     clips = []
     with sync_playwright() as p:
         browser = p.chromium.launch()
+        frame_assets = None
+        if plan.get("device_frame"):
+            frame_assets = render_frame_assets(
+                browser, plan["device_frame"], plan.get("accent") or "#6366f1",
+                plan.get("_frame_bg_kind"), plan.get("_frame_bg_payload"),
+                frame_label(plan), W, H, work / "frame_assets",
+            )
         intro = work / "intro.mp4"
         outro = work / "outro.mp4"
         encode_card(browser, "intro", plan["intro_seconds"], intro)
@@ -1221,6 +1306,8 @@ def main():
                         frames_to_clip(src, speed, W, H, clip, cover=cover)
                     else:
                         recording_to_clip(src, trim, speed, W, H, clip, cover=cover)
+                if plan.get("device_frame") and not feat.get("card"):
+                    apply_device_frame(clip, frame_assets)
                 need = audio_by_key.get(f"feat{i}")
                 ensure_min_duration(clip, seconds_for_narration(need) if need else None, W, H)
                 cache_store(cache_dir, key, clip)
