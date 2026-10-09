@@ -15,7 +15,7 @@ One file describes the whole video. Run `make_video.py plan.json --validate-only
 | `format` | no | `landscape` | `landscape` (1920x1080), `vertical` (phone CSS 390x844 at DPR 3, output 1080x1920), `square` (1080x1080) |
 | `accent` | no | `auto` | `auto` extracts the live site color when `base_url` is set. Any hex, including `#6366f1`, is kept. |
 | `click_effect` | no | `ripple` | Click animation: `ripple` (ring), `sparkle` (particle burst), `glow` (radial pulse) |
-| `nav_transition` | no | `fade` | In-browser page transition on `goto`: `fade`, `slide`, `zoom` |
+| `nav_transition` | no | `fade` | In-browser page transition on `goto`: `fade`, `slide`, `zoom`. `zoom` opens and closes like a Mac window. With a device frame, in-page `zoom` becomes a fade so the screen does not zoom on its own. |
 | `voiceover` | no | `true` | Narrate with edge-tts. Scenes are sized from the measured audio. |
 | `voiceover_voice` | no | `en-US-AriaNeural` | Any valid [edge-tts voice](https://github.com/rany2/edge-tts#voices). |
 | `custom_effects` | no | `[]` | List of `{"effect": "sparkle"\|"glow"\|"pulse", "selector": "css-selector"}` objects. Applied on every feature page after load. User instructions like "add sparkle on the submit button" map here. |
@@ -27,11 +27,11 @@ One file describes the whole video. Run `make_video.py plan.json --validate-only
 | `color_scheme` | no | | `light` or `dark`, forces the site's preference |
 | `cursor` | no | `arrow` landscape, `tap` vertical | `arrow`, `tap` (ripple only), or `none` |
 | `viewport` | no | 1920x1080, or 390x844 when vertical | Phone size for vertical. A saved 1080x1920 viewport is treated as the old default and replaced. |
-| `zoom` | no | `1.28` | Camera scale on click and highlight. `1` disables it. A step may set its own `zoom`. |
+| `zoom` | no | `1.28` | Camera scale on click and highlight. Scales the whole template (screen, device chrome, and background) with a smooth ease in and out. `1` disables it. A step may set its own `zoom`. |
 | `capture` | no | `video` | `frames` uses a CDP screencast instead of Playwright webm. |
-| `device_frame` | no | | Wrap every feature clip in one template: `macos`, `browser`, `glass`, `iphone`, `laptop`, `ipad`. Intro/outro cards stay full-screen. |
+| `device_frame` | no | | Wrap every feature clip in one template: `macos`, `browser`, `glass`, `iphone`, `laptop`, `ipad`. Intro/outro cards stay full-screen. Each feature clip opens and closes like a Mac window. |
 | `frame_background` | no | `gradient-sky` | Area around the device. Preset: `gradient-sky`, `gradient-studio`, `gradient-radial`, `gradient-mesh`, `gradient-aurora`, `gradient-sunset`, `gradient-ocean`. Or a hex color, or an image path relative to the plan file. |
-| `narration` | feature | caption | Spoken line. The on-screen `caption` can stay short. |
+| `narration` | feature | caption | One beat of the spoken story. The on-screen `caption` stays short. |
 | `intro_seconds` / `outro_seconds` | no | 3.0 / 3.5 | |
 
 ## Feature object
@@ -46,7 +46,7 @@ One file describes the whole video. Run `make_video.py plan.json --validate-only
 ```
 
 - `caption`: short line on screen.
-- `narration`: spoken line. Falls back to `caption`. Scenes grow to fit the audio.
+- `narration`: one beat of the spoken story. Falls back to `caption`. Scenes grow to fit the audio. Short points are linked into one narration.
 - A feature may be a card instead of a recording: `{"card": {"title": "Before v1.0.0", "lines": ["file.py +10 -2"]}}`.
 - `speed`: playback multiplier for slow flows, for example `1.5`.
 - `hold_ms`: how long to linger on the final state so viewers can read it.
@@ -115,7 +115,16 @@ On failure the renderer prints JSON with the feature index, the step, Playwright
 
 ## Voice-over
 
-Set `"voiceover": true` (the default) to narrate each scene with edge-tts. The spoken text is `narration` when set, otherwise the caption. Audio is generated first and measured with ffprobe. Intro, outro, and `hold_ms` grow so the line finishes before the next scene.
+Set `"voiceover": true` (the default) to narrate the video as one story with edge-tts. Write `intro_narration`, each feature `narration`, and `outro_narration` so they continue each other. A short caption is spoken with a link (`It starts here.`, `Then,`, `And finally,`) instead of as a bare point. Audio is generated first and measured with ffprobe. Intro, outro, and `hold_ms` grow so the line finishes before the next scene.
+
+```json
+"intro_narration": "Meet PixelDesk. Dark mode just landed.",
+"features": [
+  {"caption": "Dark mode", "narration": "It starts here. Open the header and the whole workspace follows you into the dark."},
+  {"caption": "Search", "narration": "From there, type a word and the tools narrow while you are still typing."}
+],
+"outro_narration": "And that's the story of PixelDesk. Try it at pixeldesk.app."
+```
 
 ```bash
 pip install edge-tts

@@ -12,7 +12,7 @@ The agent writes the plan and checks the frames. The scripts render. Auto mode i
 
 1. Read the change (`python scripts/gather_release.py`) and the live page (`python scripts/inspect_page.py <url>`). Copy selectors from that JSON.
 2. Ask which device frame to wrap the footage in: `macos`, `browser`, `glass`, `iphone`, `laptop`, `ipad`, or none. If they pick one, ask for a background image. No image means a preset (`gradient-sky` by default, or `gradient-studio`, `gradient-radial`, `gradient-mesh`, `gradient-aurora`, `gradient-sunset`, `gradient-ocean`, or a hex color). One frame wraps every feature clip. Intro and outro cards stay full-screen.
-3. Write `public/announcement-videos/<seq>_<slug>/plan.json`. Put the spoken line in `narration` and a short on-screen line in `caption`. See `references/plan-format.md`. Set `device_frame` and `frame_background` from the answer.
+3. Write `public/announcement-videos/<seq>_<slug>/plan.json`. Write one spoken story across `intro_narration`, each feature `narration`, and `outro_narration`. Keep `caption` short. See `references/plan-format.md`. Set `device_frame` and `frame_background` from the answer.
 4. Validate: `python scripts/make_video.py <plan.json> --validate-only`
 5. Render: `python scripts/make_video.py <plan.json> -o <dir>/video.mp4`
 6. Open `thumbnail.jpg` and the failure screenshots if the render exited non-zero. Fix the plan. Render again.
@@ -26,9 +26,9 @@ Output stays in `public/announcement-videos/`. Keep that path gitignored so the 
 - Selectors come from `inspect_page.py` or the DOM. Do not guess.
 - Vertical video uses a phone viewport (390x844, device scale 3) and scales up to 1080x1920. Do not set a 1080x1920 CSS viewport.
 - `accent: "auto"` reads the live site. A hex in the plan, including `#6366f1`, is kept.
-- Voice-over is edge-tts. `voiceover_voice` dynamically adapts to the product topic/domain (e.g. `en-US-AriaNeural` for product announcements, `en-US-ChristopherNeural` for developer tools/infrastructure, `en-US-JennyNeural` for UI/onboarding, `en-US-GuyNeural` for high-energy/AI launches). Set `"voiceover_voice": "auto"` or select any valid voice from the 300+ Edge-TTS catalog (`tts-voice.md` / `scripts/voices.py`). Each scene is lengthened to fit the measured clip. `narration` is what is spoken. `caption` is what is on screen.
-- Click and highlight zoom toward the target (`zoom` in the plan or on a step). Set `zoom` to `1` to turn that off.
-- `nav_transition` is `fade`, `slide`, or `zoom`.
+- Voice-over is one story, not a list of points. Write `intro_narration`, each feature `narration`, and `outro_narration` so they read in order as a single narration. `caption` stays a short on-screen line. A short point is linked into the story before it is spoken. `voiceover_voice` adapts to the topic, or set `"voiceover_voice": "auto"`. Each scene is lengthened to fit the measured clip.
+- Click and highlight zoom the whole template, device chrome and background included, with a smooth ease in and out. Set `zoom` to `1` to turn that off. Each framed feature clip opens and closes like a Mac window.
+- `nav_transition` is `fade`, `slide`, or `zoom`. `zoom` opens and closes the page like a Mac window. With a device frame, that in-page zoom is a fade, and the window open/close is on the whole template.
 - `--before-after` adds a before card from the previous tag. It does not checkout the worktree. To film the old UI, serve that tag and pass `--before-url`.
 - `capture: "frames"` records a CDP screencast instead of Playwright's webm when the webm looks soft.
 - `device_frame` wraps every feature clip in one device template: `macos`, `browser`, `glass`, `iphone`, `laptop`, `ipad`. Intro/outro cards stay full-screen. Ask before writing the plan. `frame_background` is the area around the device: `gradient-sky` (default), `gradient-studio`, `gradient-radial`, `gradient-mesh`, `gradient-aurora`, `gradient-sunset`, `gradient-ocean`, a hex color, or a path to an image. Accent-based presets follow `accent`. `gradient-sky` and `gradient-studio` stay light.

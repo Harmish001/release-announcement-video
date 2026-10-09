@@ -17,8 +17,8 @@ New plan.json fields (all optional):
   click_effect      "ripple" (default) | "sparkle" | "glow"
   nav_transition    "fade" (default) | "slide" | "zoom"
   voiceover         true (default) | false  -- requires edge-tts
-  narration         per feature, spoken instead of the short caption
-  zoom              camera scale on click/highlight, default 1.28
+  narration         spoken story beat. Short captions are joined into one story
+  zoom              whole-template camera scale on click/highlight, default 1.28
   capture           "video" (default) | "frames" (CDP screencast)
   accent            "auto" (default) or an explicit hex. #6366f1 is not auto.
   voiceover_voice   edge-tts voice name, default "en-US-AriaNeural"
@@ -431,14 +431,16 @@ OVERLAY_JS = r"""
         body.style.transform = 'none';
       });
     } else if (fx === 'zoom') {
-      body.style.transformOrigin = '50% 40%';
+      body.style.transformOrigin = '50% 46%';
       body.style.transition = 'none';
-      body.style.transform = 'scale(.9)';
-      body.style.opacity = '.35';
+      body.style.transform = 'scale(.72)';
+      body.style.opacity = '0';
       requestAnimationFrame(() => {
-        body.style.transition = 'transform .35s ease, opacity .3s ease';
-        body.style.transform = 'none';
-        body.style.opacity = '1';
+        requestAnimationFrame(() => {
+          body.style.transition = 'transform .55s cubic-bezier(.22,1.2,.32,1), opacity .36s ease';
+          body.style.transform = 'none';
+          body.style.opacity = '1';
+        });
       });
     } else {
       const v = document.getElementById('__rv_nav_veil');
@@ -459,16 +461,62 @@ OVERLAY_JS = r"""
     box-shadow:0 10px 34px rgba(0,0,0,.4);border:1px solid rgba(255,255,255,.14);
     opacity:0;transform:translate(-50%,10px);transition:opacity .35s,transform .35s}
   #__rv_cap.on{opacity:1;transform:translate(-50%,0)}
-  .__rv_hl{position:fixed;z-index:2147483645;pointer-events:none;border:4px solid ${ACCENT};border-radius:12px;
+  .__rv_hl{position:absolute;z-index:2147483645;pointer-events:none;border:4px solid ${ACCENT};border-radius:12px;
     box-shadow:0 0 0 9999px rgba(8,10,20,.45);opacity:0;transition:opacity .35s}
   .__rv_hl.on{opacity:1}
   __EXTRA_CSS__`;
+
+  function marks() {
+    let el = document.getElementById('__rv_marks');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = '__rv_marks';
+    el.style.cssText = 'position:fixed;inset:0;z-index:2147483645;pointer-events:none';
+    document.documentElement.appendChild(el);
+    return el;
+  }
+  /* Visual box -> the mark layer's pre-zoom coordinates, so the ring stays on the target. */
+  function currentCam() {
+    const layer = document.getElementById('__rv_marks');
+    if (!layer) return {s:1, ox:0, oy:0};
+    const tf = getComputedStyle(layer).transform;
+    let s = 1;
+    if (tf && tf !== 'none') {
+      const m = tf.match(/matrix\(([^)]+)\)/);
+      if (m) s = parseFloat(m[1].split(',')[0]) || 1;
+    }
+    const o = (layer.style.transformOrigin || '0px 0px').trim().split(/\s+/);
+    return {s: s, ox: parseFloat(o[0]) || 0, oy: parseFloat(o[1]) || 0};
+  }
+  function toLocalBox(b) {
+    const c = currentCam();
+    const s = c.s || 1;
+    return {
+      x: c.ox + (b.x - c.ox) / s,
+      y: c.oy + (b.y - c.oy) / s,
+      width: b.width / s,
+      height: b.height / s,
+    };
+  }
+  function applyCam(vx, vy, scale, transition) {
+    const body = stage();
+    const layer = marks();
+    const off = window.__rvOff || {x:0, y:0};
+    body.style.transition = layer.style.transition = transition;
+    body.style.transformOrigin = (vx - off.x) + 'px ' + (vy - off.y) + 'px';
+    layer.style.transformOrigin = vx + 'px ' + vy + 'px';
+    const tr = scale === 1 ? 'none' : 'scale(' + scale + ')';
+    body.style.transform = layer.style.transform = tr;
+  }
 
   const mount = () => {
     const root = document.documentElement;
     const st = document.createElement('style'); st.textContent = baseCss; root.appendChild(st);
     const cap = document.createElement('div'); cap.id = '__rv_cap'; root.appendChild(cap);
     ensureVeil();
+    const body = stage();
+    const r = body.getBoundingClientRect();
+    window.__rvOff = {x: r.left, y: r.top};
 
     window.__rvCaption = (t) => {
       try { sessionStorage.setItem('__rv_cap', t || ''); } catch (e) {}
@@ -501,23 +549,26 @@ OVERLAY_JS = r"""
     };
     window.__rvSpot = (b, ms) => {
       const h = document.createElement('div'); h.className = '__rv_hl';
-      const p = 8; h.style.left = (b.x - p) + 'px'; h.style.top = (b.y - p) + 'px';
-      h.style.width = (b.width + 2 * p) + 'px'; h.style.height = (b.height + 2 * p) + 'px';
-      root.appendChild(h); requestAnimationFrame(() => h.classList.add('on'));
+      const p = 8;
+      const box = toLocalBox(b);
+      const pad = p / (currentCam().s || 1);
+      h.style.left = (box.x - pad) + 'px'; h.style.top = (box.y - pad) + 'px';
+      h.style.width = (box.width + 2 * pad) + 'px'; h.style.height = (box.height + 2 * pad) + 'px';
+      marks().appendChild(h); requestAnimationFrame(() => h.classList.add('on'));
       setTimeout(() => h.classList.remove('on'), Math.max(ms - 350, 100));
       setTimeout(() => h.remove(), ms + 100);
     };
     window.__rvZoomTo = (b, scale) => {
-      const body = stage();
       const cx = b.x + b.width / 2, cy = b.y + b.height / 2;
-      body.style.transformOrigin = cx + 'px ' + cy + 'px';
-      body.style.transition = 'transform .45s cubic-bezier(.2,.7,.2,1)';
-      body.style.transform = 'scale(' + scale + ')';
+      applyCam(cx, cy, scale, 'transform .72s cubic-bezier(.22,1,.36,1)');
     };
     window.__rvZoomReset = () => {
       const body = stage();
-      body.style.transition = 'transform .3s ease';
+      const layer = document.getElementById('__rv_marks');
+      const t = 'transform .64s cubic-bezier(.4,0,.2,1)';
+      body.style.transition = t;
       body.style.transform = 'none';
+      if (layer) { layer.style.transition = t; layer.style.transform = 'none'; }
     };
     /* nav: fade uses the veil. slide and zoom transform body, then the next
        document reads __rv_nav from sessionStorage and animates in. */
@@ -529,9 +580,9 @@ OVERLAY_JS = r"""
         body.style.transform = 'translateX(-12%)';
         body.style.opacity = '.2';
       } else if (fx === 'zoom') {
-        body.style.transformOrigin = '50% 40%';
-        body.style.transition = 'transform .25s ease, opacity .25s ease';
-        body.style.transform = 'scale(1.06)';
+        body.style.transformOrigin = '50% 46%';
+        body.style.transition = 'transform .42s cubic-bezier(.5,.05,.9,.45), opacity .3s ease';
+        body.style.transform = 'scale(.8)';
         body.style.opacity = '0';
       } else {
         const v = document.getElementById('__rv_nav_veil');
@@ -607,7 +658,7 @@ def overlay_script(plan):
 def nav_transition_in(page, nav_fx):
     try:
         page.evaluate("(fx) => window.__rvNavIn && window.__rvNavIn(fx)", nav_fx)
-        page.wait_for_timeout(280)
+        page.wait_for_timeout(460 if nav_fx == "zoom" else 280)
     except Exception:
         pass
 
@@ -615,7 +666,7 @@ def nav_transition_in(page, nav_fx):
 def nav_transition_out(page, nav_fx):
     """Fade-out of the veil. Slide and zoom play from the init script on the new document."""
     try:
-        page.wait_for_timeout(360)
+        page.wait_for_timeout(620 if nav_fx == "zoom" else 360)
         if nav_fx == "fade":
             page.evaluate("() => window.__rvNavOut && window.__rvNavOut()")
             page.wait_for_timeout(300)
@@ -636,14 +687,39 @@ def dismiss_cookies(page):
             continue
 
 
-def zoom_reset(page):
+class MotionLog:
+    """Click-zoom times, in seconds on the finished clip."""
+
+    def __init__(self):
+        self.events = []
+
+    def zoom_in(self, t, scale, cx, cy):
+        self.zoom_out(t)
+        self.events.append({
+            "t0": round(float(t), 3),
+            "t1": None,
+            "scale": float(scale),
+            "cx": float(cx),
+            "cy": float(cy),
+        })
+
+    def zoom_out(self, t):
+        if self.events and self.events[-1].get("t1") is None:
+            self.events[-1]["t1"] = round(float(t), 3)
+
+
+def zoom_reset(page, plan=None, motion=None, now=None):
+    if plan and plan.get("device_frame"):
+        if motion is not None and now is not None:
+            motion.zoom_out(now())
+        return
     try:
         page.evaluate("() => window.__rvZoomReset && window.__rvZoomReset()")
     except Exception:
         pass
 
 
-def zoom_to(page, box, plan, step):
+def zoom_to(page, box, plan, step, motion=None, now=None):
     raw = step.get("zoom", plan.get("zoom", 1.28))
     if raw is False or raw is None:
         return
@@ -653,9 +729,18 @@ def zoom_to(page, box, plan, step):
         return
     if scale <= 1.01 or not box:
         return
+    if plan.get("device_frame"):
+        # Page CSS would scale only the screen inside the chrome. The composite zooms the whole template.
+        if motion is not None and now is not None:
+            motion.zoom_in(now(), scale, box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+        try:
+            page.wait_for_timeout(780)
+        except Exception:
+            pass
+        return
     try:
         page.evaluate("([b,s]) => window.__rvZoomTo && window.__rvZoomTo(b, s)", [box, scale])
-        page.wait_for_timeout(480)
+        page.wait_for_timeout(780)
     except Exception:
         pass
 
@@ -669,11 +754,18 @@ def move_to(page, box, plan):
     return x, y
 
 
-def run_step(page, plan, step, shot_path=None):
+def run_step(page, plan, step, shot_path=None, motion=None, now=None):
     a = step["action"]
     nav_fx = plan.get("nav_transition", "fade")
+    # A page zoom would scale only the screen inside the chrome. The clip open/close moves the whole window.
+    if plan.get("device_frame") and nav_fx == "zoom":
+        nav_fx = "fade"
+
+    def tick():
+        return now() if now else 0.0
+
     if a != "wait":
-        zoom_reset(page)
+        zoom_reset(page, plan, motion, tick)
     if "caption" in step and a != "caption":
         page.evaluate("t => window.__rvCaption && window.__rvCaption(t)", step["caption"])
     if a == "goto":
@@ -707,7 +799,7 @@ def run_step(page, plan, step, shot_path=None):
                     "window.__rvClickAnim && window.__rvClickAnim(x,y); }",
                     [x, y])
             page.mouse.click(x, y)
-            zoom_to(page, box, plan, step)
+            zoom_to(page, box, plan, step, motion, tick)
             if a == "type":
                 if step.get("clear"):
                     page.keyboard.press("Control+A")
@@ -730,7 +822,7 @@ def run_step(page, plan, step, shot_path=None):
         ms = int(step.get("ms", 1500))
         box = loc.bounding_box()
         page.evaluate("([b,ms]) => window.__rvSpot && window.__rvSpot(b,ms)", [box, ms])
-        zoom_to(page, box, plan, step)
+        zoom_to(page, box, plan, step, motion, tick)
         page.wait_for_timeout(ms + 150)
     elif a == "caption":
         page.evaluate("t => window.__rvCaption && window.__rvCaption(t)", step.get("text", ""))
@@ -805,10 +897,23 @@ def record_feature(browser, plan, idx, feat, rec_dir, fail_dir, shot_path=None):
         cdp, frames = start_screencast(page, plan)
     t_page = time.monotonic()
     trim = 0.0
+    speed = float(feat.get("speed") or 1)
+    motion = MotionLog()
+    log_motion = False
+    use_trim = plan.get("capture") != "frames"
+
+    def now():
+        cut = trim if use_trim else 0.0
+        return max(0.0, (time.monotonic() - t_page - cut) / speed)
+
     try:
         for j, step in enumerate(feat["steps"]):
             try:
-                done = run_step(page, plan, step, shot_path)
+                done = run_step(
+                    page, plan, step, shot_path,
+                    motion=motion if log_motion else None,
+                    now=now,
+                )
             except Exception as exc:  # fail loudly: a video with a silently skipped step is misleading
                 shot = fail_dir / f"feature{idx}_step{j}.png"
                 try:
@@ -820,6 +925,7 @@ def record_feature(browser, plan, idx, feat, rec_dir, fail_dir, shot_path=None):
                     f"{str(exc).splitlines()[0][:300]}. Screenshot of the page at failure: {shot}")
             if j == 0:
                 trim = max(done - t_page + 0.05, 0.0)
+                log_motion = True
                 if feat.get("caption"):
                     page.evaluate("t => window.__rvCaption && window.__rvCaption(t)", feat["caption"])
                     page.wait_for_timeout(400)
@@ -854,8 +960,8 @@ def record_feature(browser, plan, idx, feat, rec_dir, fail_dir, shot_path=None):
         fdir.mkdir(parents=True, exist_ok=True)
         for i, blob in enumerate(frames):
             (fdir / f"f{i:05d}.jpg").write_bytes(base64.b64decode(blob))
-        return fdir, 0.0, "frames"
-    return Path(video.path()), trim, "video"
+        return fdir, 0.0, "frames", motion.events
+    return Path(video.path()), trim, "video", motion.events
 
 
 # --------------------------------------------------------------------------- voice-over (edge-tts)
@@ -998,18 +1104,205 @@ def frames_to_clip(frame_dir, speed, W, H, out, cover=False):
 
 # --------------------------------------------------------------------------- device frame compositing
 
-def apply_device_frame(clip_path, assets):
+ZOOM_IN_S = 0.72
+ZOOM_OUT_S = 0.64
+
+
+def _q(expr):
+    """Quote an ffmpeg expression. Commas inside single quotes stay in the expression."""
+    return "'" + expr.replace("'", "") + "'"
+
+
+def _smooth(u):
+    return f"({u})*({u})*(3-2*({u}))"
+
+
+def map_zoom_point(cx, cy, viewport, screen):
+    """Map a CSS point into the framed canvas. Matches the cover-crop into the screen hole."""
+    vp_w = float((viewport or {}).get("width") or screen["w"])
+    vp_h = float((viewport or {}).get("height") or screen["h"])
+    sw, sh = float(screen["w"]), float(screen["h"])
+    scale = max(sw / vp_w, sh / vp_h)
+    off_x = (vp_w * scale - sw) / 2
+    off_y = (vp_h * scale - sh) / 2
+    return screen["x"] + cx * scale - off_x, screen["y"] + cy * scale - off_y
+
+
+def window_spans(duration):
+    """Mac window open at the head, close at the tail. Too-short clips stay still."""
+    D = float(duration)
+    if D < 1.15:
+        return 0.0, 0.0
+    return min(0.50, D * 0.18), min(0.34, D * 0.14)
+
+
+def window_zoom_expr(duration, open_d, close_d):
+    """Ease-out-back open, ease-in close. 1 in the middle. No pow() on a negative base."""
+    z = "1"
+    if open_d > 0:
+        u = f"clip(t/{open_d:.3f},0,1)"
+        p = f"(({u})-1)"
+        back = f"(1+2.70158*{p}*{p}*{p}+1.70158*{p}*{p})"
+        z = f"if(lt(t,{open_d:.3f}),(0.62+0.38*{back}),1)"
+    if close_d > 0:
+        start = float(duration) - close_d
+        v = f"clip((t-{start:.3f})/{close_d:.3f},0,1)"
+        z = f"({z})*if(gt(t,{start:.3f}),(1-0.2*{v}*{v}),1)"
+    return z
+
+
+def _zoom_piece(t0, t1, scale):
+    u = f"clip((t-{t0:.3f})/{ZOOM_IN_S},0,1)"
+    v = f"clip((t-{t1:.3f})/{ZOOM_OUT_S},0,1)"
+    s = f"{scale:.4f}"
+    return (
+        f"if(lt(t,{t0:.3f}),1,"
+        f"if(lt(t,{t0 + ZOOM_IN_S:.3f}),1+({s}-1)*{_smooth(u)},"
+        f"if(lt(t,{t1:.3f}),{s},"
+        f"if(lt(t,{t1 + ZOOM_OUT_S:.3f}),{s}+(1-{s})*{_smooth(v)},1))))"
+    )
+
+
+def click_zoom_expr(events):
+    expr = "1"
+    for ev in reversed(events):
+        piece = _zoom_piece(ev["t0"], ev["t1"], ev["scale"])
+        expr = f"if(gte(t,{ev['t0']:.3f}),{piece},{expr})"
+    return expr
+
+
+def prepare_zooms(zooms, viewport, screen, size, duration, close_d):
+    W, H = size
+    latest = max(0.0, float(duration) - close_d - ZOOM_OUT_S)
+    out = []
+    for ev in zooms or []:
+        try:
+            scale = float(ev.get("scale") or 1)
+        except (TypeError, ValueError):
+            continue
+        if scale <= 1.01:
+            continue
+        scale = min(2.4, scale)
+        t0 = max(0.0, float(ev.get("t0") or 0))
+        if t0 >= duration:
+            continue
+        t1 = ev.get("t1")
+        t1 = float(t1) if t1 is not None else latest
+        if t1 > latest:
+            t1 = latest
+        if t1 < t0:
+            t1 = t0
+        fx, fy = map_zoom_point(float(ev["cx"]), float(ev["cy"]), viewport, screen)
+        out.append({
+            "t0": t0, "t1": t1, "scale": scale,
+            "fx": min(max(fx, 0), W), "fy": min(max(fy, 0), H),
+        })
+    return out
+
+
+def _focus_expr(events, axis, center):
+    expr = f"{center:.2f}"
+    for ev in events:
+        end = ev["t1"] + ZOOM_OUT_S
+        coord = ev["fx"] if axis == "x" else ev["fy"]
+        expr = f"if(between(t,{ev['t0']:.3f},{end:.3f}),{coord:.2f},{expr})"
+    return expr
+
+
+def _scale_opts(z_expr):
+    w = f"trunc(iw*({z_expr})/2)*2"
+    h = f"trunc(ih*({z_expr})/2)*2"
+    return f"scale=w={_q(w)}:h={_q(h)}:eval=frame:flags=lanczos"
+
+
+def _want_motion(duration, zooms):
+    if zooms:
+        return True
+    return float(duration) >= 1.15
+
+
+def legacy_frame_filter(screen):
+    sw, sh, sx, sy = screen["w"], screen["h"], screen["x"], screen["y"]
+    return (
+        f"[1:v]scale={sw}:{sh}:force_original_aspect_ratio=increase:flags=lanczos,"
+        f"crop={sw}:{sh},setsar=1,format=gbrp[color];"
+        f"[3:v]scale={sw}:{sh},format=rgba,alphaextract,format=gray[msk];"
+        f"[color][msk]alphamerge,format=rgba[rounded];"
+        f"[0:v][rounded]overlay={sx}:{sy}:shortest=1[base];"
+        f"[base][2:v]overlay=0:0:shortest=1,format=yuv420p[out]"
+    )
+
+
+def frame_filter_complex(assets, zooms, viewport, duration):
+    """Screen + chrome scale together. Background stays for the window open/close.
+
+    Click zoom then scales that whole picture, background included.
+    """
+    screen = assets["screen"]
+    lay = assets["layout"]
+    sw, sh, sx, sy = screen["w"], screen["h"], screen["x"], screen["y"]
+    W, H = lay["W"], lay["H"]
+    device = lay["device"]
+    dcx = device["x"] + device["w"] / 2
+    dcy = device["y"] + device["h"] / 2
+    open_d, close_d = window_spans(duration)
+    prepared = prepare_zooms(zooms, viewport, screen, (W, H), duration, close_d)
+    z_win = window_zoom_expr(duration, open_d, close_d)
+    parts = [
+        f"[1:v]scale={sw}:{sh}:force_original_aspect_ratio=increase:flags=lanczos,"
+        f"crop={sw}:{sh},setsar=1,format=gbrp[color]",
+        f"[3:v]scale={sw}:{sh},format=rgba,alphaextract,format=gray[msk]",
+        "[color][msk]alphamerge,format=rgba[rounded]",
+        f"color=c=black@0.0:s={W}x{H}:r={FPS}:d={duration + 1:.3f},format=rgba[clear]",
+        f"[clear][rounded]overlay={sx}:{sy}:format=auto:shortest=1[withscreen]",
+        "[2:v]format=rgba[chrome]",
+        "[withscreen][chrome]overlay=0:0:format=auto:shortest=1,format=rgba[device]",
+    ]
+    fades = []
+    if open_d > 0:
+        fades.append(f"fade=t=in:st=0:d={min(0.24, open_d * 0.7):.3f}:alpha=1")
+    if close_d > 0:
+        fades.append(f"fade=t=out:st={duration - close_d:.3f}:d={close_d:.3f}:alpha=1")
+    if fades or open_d > 0 or close_d > 0:
+        chain = ",".join(fades)
+        if open_d > 0 or close_d > 0:
+            chain = (chain + "," if chain else "") + _scale_opts(z_win) + ",format=rgba"
+        parts.append(f"[device]{chain}[dscale]")
+        moving = "[dscale]"
+    else:
+        moving = "[device]"
+    ox = f"{dcx:.2f}*(1-overlay_w/main_w)"
+    oy = f"{dcy:.2f}*(1-overlay_h/main_h)"
+    parts.append(
+        f"[0:v]{moving}overlay=x={_q(ox)}:y={_q(oy)}:eval=frame:format=auto:shortest=1[comp]"
+    )
+    if prepared:
+        zx = f"({_focus_expr(prepared, 'x', W / 2)})*(1-overlay_w/main_w)"
+        zy = f"({_focus_expr(prepared, 'y', H / 2)})*(1-overlay_h/main_h)"
+        parts.append(f"[comp]{_scale_opts(click_zoom_expr(prepared))}[zoomed]")
+        parts.append(f"color=c=black:s={W}x{H}:r={FPS}:d={duration + 1:.3f}[zbase]")
+        parts.append(
+            f"[zbase][zoomed]overlay=x={_q(zx)}:y={_q(zy)}:eval=frame:format=auto:shortest=1,format=yuv420p[out]"
+        )
+    else:
+        parts.append("[comp]format=yuv420p[out]")
+    return ";".join(parts)
+
+
+def apply_device_frame(clip_path, assets, zooms=None, viewport=None):
     """Scale a clip into the screen hole, under the chrome, on the background.
 
     assets come from render_frame_assets (one background, one chrome, one mask).
-    The clip is replaced in place.
+    The clip is replaced in place. Long clips also open and close like a Mac window,
+    and click zooms scale the whole template.
     """
     if not assets:
         return
-    s = assets["screen"]
-    sw, sh, sx, sy = s["w"], s["h"], s["x"], s["y"]
-    # Looped stills have no end. Cap the output at the clip length.
     secs = duration(clip_path)
+    if _want_motion(secs, zooms) and assets.get("layout"):
+        graph = frame_filter_complex(assets, zooms, viewport, secs)
+    else:
+        graph = legacy_frame_filter(assets["screen"])
     framed = clip_path.with_suffix(".framed.mp4")
     run([
         "ffmpeg", "-y",
@@ -1017,15 +1310,7 @@ def apply_device_frame(clip_path, assets):
         "-i", str(clip_path),
         "-framerate", str(FPS), "-loop", "1", "-i", str(assets["chrome"]),
         "-framerate", str(FPS), "-loop", "1", "-i", str(assets["mask"]),
-        "-filter_complex",
-        (
-            f"[1:v]scale={sw}:{sh}:force_original_aspect_ratio=increase:flags=lanczos,"
-            f"crop={sw}:{sh},setsar=1,format=gbrp[color];"
-            f"[3:v]scale={sw}:{sh},format=rgba,alphaextract,format=gray[msk];"
-            f"[color][msk]alphamerge,format=rgba[rounded];"
-            f"[0:v][rounded]overlay={sx}:{sy}:shortest=1[base];"
-            f"[base][2:v]overlay=0:0:shortest=1,format=yuv420p[out]"
-        ),
+        "-filter_complex", graph,
         "-map", "[out]",
         "-c:v", "libx264", "-crf", "14", "-preset", "slow", "-an",
         "-r", str(FPS), "-t", f"{secs:.3f}",
@@ -1184,6 +1469,8 @@ def feature_payload(plan, feat):
         "device_frame": plan.get("device_frame"),
         "frame_bg": plan.get("_frame_bg_kind"),
         "frame_bg_val": plan.get("_frame_bg_payload"),
+        "frame_motion": 1,
+        "mark_zoom": 1,
     }
 
 
@@ -1293,6 +1580,7 @@ def main():
         for i, feat in enumerate(plan["features"]):
             clip = work / f"feature{i}.mp4"
             key = scene_hash(feature_payload(plan, feat))
+            events = []
             if not cache_hit(cache_dir, key, clip):
                 if feat.get("card"):
                     secs = max(2.5, int(feat.get("hold_ms") or 2500) / 1000)
@@ -1300,16 +1588,16 @@ def main():
                     encode_card(browser, "beat", secs, clip, title=card.get("title"), lines=card.get("lines") or [])
                 else:
                     rec_dir = work / f"rec{i}"
-                    src, trim, kind = record_feature(browser, plan, i, feat, rec_dir, fail_dir, shot_path)
+                    src, trim, kind, events = record_feature(browser, plan, i, feat, rec_dir, fail_dir, shot_path)
                     speed = feat.get("speed", 1)
                     if kind == "frames":
                         frames_to_clip(src, speed, W, H, clip, cover=cover)
                     else:
                         recording_to_clip(src, trim, speed, W, H, clip, cover=cover)
-                if plan.get("device_frame") and not feat.get("card"):
-                    apply_device_frame(clip, frame_assets)
                 need = audio_by_key.get(f"feat{i}")
                 ensure_min_duration(clip, seconds_for_narration(need) if need else None, W, H)
+                if plan.get("device_frame") and not feat.get("card"):
+                    apply_device_frame(clip, frame_assets, zooms=events, viewport=plan["viewport"])
                 cache_store(cache_dir, key, clip)
             clips.append(clip)
         thumb = out.parent / "thumbnail.jpg"

@@ -99,27 +99,127 @@ def apply_narration_timing(plan, audio_by_key):
     return plan
 
 
+_STORY_STARTS = (
+    "it ", "it's ", "we ", "you ", "this ", "that ", "here's ", "here is ",
+    "meet ", "first", "then", "next", "finally", "and ", "from ", "after ",
+    "now ", "watch ", "let's ", "lets ", "today ", "welcome ", "before ",
+)
+
+
+def _clean(text):
+    return " ".join((text or "").split()).strip()
+
+
+def _sentence(text):
+    t = _clean(text)
+    if not t:
+        return ""
+    t = t[0].upper() + t[1:]
+    if t[-1] not in ".!?":
+        t += "."
+    return t
+
+
+def _clause(text):
+    """Lowercase a normal word. Leave 'OAuth' and 'API' alone."""
+    t = _clean(text).rstrip(".!?")
+    if len(t) >= 2 and t[0].isupper() and t[1].islower():
+        t = t[0].lower() + t[1:]
+    return t
+
+
+def _is_prose(text):
+    t = _clean(text)
+    if not t:
+        return False
+    if len(t.split()) >= 16:
+        return True
+    return t.count(".") + t.count("!") + t.count("?") >= 2
+
+
+def _starts_story(text):
+    low = _clean(text).lower()
+    return any(low.startswith(prefix) for prefix in _STORY_STARTS)
+
+
+def _speak_cta(cta):
+    c = _clean(cta)
+    for prefix in ("https://", "http://"):
+        if c.lower().startswith(prefix):
+            c = c[len(prefix):]
+    return c.strip("/")
+
+
+def _intro_line(plan, beat_count):
+    custom = _clean(plan.get("intro_narration") or "")
+    if custom and (_is_prose(custom) or _starts_story(custom)):
+        return _sentence(custom)
+    product = _clean(plan.get("product") or "")
+    headline = _clean(plan.get("headline") or "")
+    sub = _clean(plan.get("subhead") or "")
+    bits = []
+    if custom:
+        if product:
+            bits.append(f"Meet {product}.")
+        bits.append(_sentence(custom))
+    elif product and headline and headline.lower() != product.lower():
+        bits.append(f"Meet {product}.")
+        bits.append(_sentence(headline))
+    elif product:
+        bits.append(f"Meet {product}.")
+    elif headline:
+        bits.append(_sentence(headline))
+    if sub and sub.lower() not in (headline or "").lower() and sub.lower() not in (custom or "").lower():
+        bits.append(_sentence(sub))
+    if beat_count > 1:
+        bits.append("Let me show you how it comes together.")
+    elif not bits:
+        bits.append("Let me show you what changed.")
+    return " ".join(bits)
+
+
+def _beat_line(text, index, count):
+    if _is_prose(text) or _starts_story(text):
+        return _sentence(text)
+    if count == 1:
+        return f"Here's what changed. {_sentence(text)}"
+    if index == 0:
+        return f"It starts here. {_sentence(text)}"
+    if index == count - 1:
+        return f"And finally, {_clause(text)}."
+    prefix = ("From there", "Then", "After that", "Next")[(index - 1) % 4]
+    return f"{prefix}, {_clause(text)}."
+
+
+def _outro_line(plan):
+    custom = _clean(plan.get("outro_narration") or "")
+    if custom:
+        return _sentence(custom)
+    product = _clean(plan.get("product") or "")
+    who = product or "this release"
+    line = f"And that's the story of {who}."
+    host = _speak_cta(plan.get("cta"))
+    if host:
+        line += f" Try it at {host}."
+    return line
+
+
 def narration_lines(plan):
-    product = (plan.get("product") or "").strip()
-    headline = (plan.get("headline") or "").strip()
-    intro = (plan.get("intro_narration") or "").strip()
-    if not intro:
-        intro = f"{product}: {headline}".strip(": ") if product else headline
-    lines = [{"key": "intro", "clip_idx": 0, "text": intro}]
+    """Spoken lines for one continuous story. Short captions get the links."""
+    indexed = []
     for i, feat in enumerate(plan.get("features") or []):
-        text = (feat.get("narration") or feat.get("caption") or "").strip()
+        text = _clean(feat.get("narration") or feat.get("caption") or "")
         if text:
-            lines.append({"key": f"feat{i}", "clip_idx": i + 1, "text": text})
-    outro = (plan.get("outro_narration") or "").strip()
-    if not outro:
-        version = (plan.get("version") or "").strip()
-        if version and version.lower() not in ("latest", "head", "latest release"):
-            outro = f"What's new in {version}."
-        elif plan.get("cta"):
-            outro = f"Available at {plan['cta']}."
-        else:
-            outro = "That's the release."
-    lines.append({"key": "outro", "clip_idx": len(plan.get("features") or []) + 1, "text": outro})
+            indexed.append((i, text))
+    lines = [{"key": "intro", "clip_idx": 0, "text": _intro_line(plan, len(indexed))}]
+    count = len(indexed)
+    for n, (i, text) in enumerate(indexed):
+        lines.append({"key": f"feat{i}", "clip_idx": i + 1, "text": _beat_line(text, n, count)})
+    lines.append({
+        "key": "outro",
+        "clip_idx": len(plan.get("features") or []) + 1,
+        "text": _outro_line(plan),
+    })
     return lines
 
 
@@ -403,4 +503,27 @@ if __name__ == "__main__":
     lines = youtube_chapter_lines(["Intro", "Export"], [3.0, 4.0])
     assert lines[0].startswith("0:00") and lines[1].startswith("0:02")
     assert format_timestamp(1.4 - 0.4) == "0:01"
+    story = narration_lines({
+        "product": "PixelDesk",
+        "headline": "Dark mode",
+        "cta": "https://pixeldesk.app",
+        "features": [{"caption": "Switch to dark mode"}, {"caption": "Add OAuth login"}],
+    })
+    assert story[0]["text"].startswith("Meet PixelDesk")
+    assert "comes together" in story[0]["text"]
+    assert story[1]["text"].startswith("It starts here.")
+    assert story[2]["text"].startswith("And finally, add OAuth login.")
+    assert "oAuth" not in story[2]["text"]
+    assert story[3]["text"].startswith("And that's the story of PixelDesk.")
+    assert "pixeldesk.app" in story[3]["text"]
+    kept = narration_lines({
+        "product": "PixelDesk",
+        "headline": "Search",
+        "intro_narration": "Meet PixelDesk. Today we ship search that keeps up with you.",
+        "features": [{"narration": "You open search, type a word, and the list narrows while you are still typing."}],
+        "outro_narration": "That is the whole release, and it is live now.",
+    })
+    assert kept[0]["text"].startswith("Meet PixelDesk. Today")
+    assert kept[1]["text"].startswith("You open search")
+    assert kept[2]["text"].startswith("That is the whole release")
     print("ok")
